@@ -4,6 +4,7 @@ import path from 'node:path';
 import { ROOT, loadEnv } from './lib/util.mjs';
 import { lookupLocation, nearbySchools, transport, crime, prices, DESTINATIONS } from './lib/sources.mjs';
 import { saveOverride } from './lib/catchment.mjs';
+import { flood } from './lib/flood.mjs';
 
 loadEnv();
 const PORT = Number(process.env.PORT) || 5173;
@@ -44,6 +45,10 @@ const routes = {
       radiusM: Math.min(Number(p.get('radius')) || 1000, 1500),
       years: Math.min(Number(p.get('years')) || 3, 10),
     });
+  },
+  '/api/flood': async (p) => {
+    const { lat, lng } = point(p);
+    return flood(lat, lng);
   },
   '/api/config': async () => ({
     destinations: Object.entries(DESTINATIONS).map(([key, d]) => ({ key, name: d.name })),

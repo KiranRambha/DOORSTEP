@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 
 import { makeZip } from './helpers.mjs';
 import { readZipEntry } from '../lib/unzip.mjs';
-import { parseFloodCsv } from '../lib/flood.mjs';
+import { parseFloodCsv, floodSummary } from '../lib/flood.mjs';
 
 test('zip reader finds a deflated entry by pattern, using the central directory', () => {
   const zip = makeZip([
@@ -29,4 +29,38 @@ test('flood CSV parses residential counts per postcode and strips the BOM', () =
     + 'TW9 4H*,299,273,25,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,TW,9,4,H\r\n'
     + 'VPO01148,1,0,1,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,,,,\r\n';
   assert.deepEqual(parseFloodCsv(csv), { 'WF13 2HF': [4, 0, 0, 4, 0], 'TN9 1RD': [20, 4, 3, 2, 1] });
+});
+
+test('flood summary counts English postcodes and picks a verdict', () => {
+  const data = { postcodes: { 'TN9 1RD': [20, 4, 3, 2, 1], 'TN9 1RE': [10, 0, 0, 5, 0] } };
+  const pcs = [{ postcode: 'TN9 1RD', country: 'England' }, { postcode: 'TN9 1RE', country: 'England' }, { postcode: 'TN9 1RF', country: 'England' }];
+  const s = floodSummary(pcs, data);
+  assert.deepEqual(s.homes, { high: 4, medium: 3, low: 7, veryLow: 1 });
+  assert.equal(s.medHigh, 7);
+  assert.equal(s.postcodesChecked, 3);
+  assert.equal(s.postcodesAtRisk, 2);
+  assert.equal(s.homesInAtRiskPostcodes, 30);
+  assert.equal(s.verdict, 'higher'); // 1 of 3 postcodes (33%) has medium/high homes, which is at least 10%
+  assert.equal(s.label, 'Higher risk');
+  const none = floodSummary([{ postcode: 'TN9 1RF', country: 'England' }], data);
+  assert.equal(none.verdict, 'low');
+  assert.equal(none.label, 'Low risk area');
+});
+
+test('flood summary: "some risk" when a few homes are at risk across many postcodes', () => {
+  const postcodes = { 'AB1 1AA': [10, 0, 2, 0, 0] };
+  const pcs = Array.from({ length: 20 }, (_, i) => ({ postcode: i ? `AB1 1A${String.fromCharCode(65 + i)}` : 'AB1 1AA', country: 'England' }));
+  assert.equal(floodSummary(pcs, { postcodes }).verdict, 'some'); // 1 of 20 = 5%, 2 homes
+});
+
+test('flood summary: Wales is not covered, border areas are partial', () => {
+  const data = { postcodes: {} };
+  const wales = floodSummary([{ postcode: 'CF10 1AA', country: 'Wales' }], data);
+  assert.equal(wales.covered, false);
+  assert.equal(wales.verdict, null);
+  assert.equal(wales.label, 'No flood data for Wales');
+  const border = floodSummary([{ postcode: 'CF10 1AA', country: 'Wales' }, { postcode: 'HR1 1AA', country: 'England' }], data);
+  assert.equal(border.covered, true);
+  assert.equal(border.partial, true);
+  assert.equal(border.postcodesChecked, 1);
 });

@@ -125,9 +125,9 @@ test('API flows with mocked services', async () => {
     }
     if (u.includes('api.postcodes.io/postcodes?lat=')) {
       return json({ result: [
-        { postcode: 'SG5 1NZ', latitude: 51.9535, longitude: -0.283 },
-        { postcode: 'SG5 1PA', latitude: 51.9545, longitude: -0.284 },
-        { postcode: 'SG5 9ZZ', latitude: 51.99, longitude: -0.30 },
+        { postcode: 'SG5 1NZ', latitude: 51.9535, longitude: -0.283, country: 'England' },
+        { postcode: 'SG5 1PA', latitude: 51.9545, longitude: -0.284, country: 'England' },
+        { postcode: 'SG5 9ZZ', latitude: 51.99, longitude: -0.30, country: 'England' },
       ] });
     }
     if (u.includes('landregistry.data.gov.uk')) {
@@ -211,6 +211,24 @@ test('API flows with mocked services', async () => {
   const before = calls.length;
   await src.prices(51.9535, -0.283, { radiusM: 1000, years: 3 });
   assert.equal(calls.length, before);
+
+  // Flood: a setup hint until data/flood.json exists, then an area summary.
+  const fl = await import(path.join(tmp, 'lib', 'flood.mjs'));
+  const missing = await fl.flood(51.9535, -0.283);
+  assert.equal(missing.ready, false);
+  assert.match(missing.message, /setup:flood/);
+  fs.writeFileSync(path.join(tmp, 'data', 'flood.json'), JSON.stringify({
+    source: 'test', fileDate: '2026-06-12', builtAt: 'now',
+    postcodes: { 'SG5 1PA': [12, 2, 1, 3, 0] },
+  }));
+  const f = await fl.flood(51.9535, -0.283);
+  assert.equal(f.ready, true);
+  assert.equal(f.fileDate, '2026-06-12');
+  assert.equal(f.postcodesChecked, 2, 'only postcodes within 1 km');
+  assert.equal(f.medHigh, 3);
+  assert.equal(f.verdict, 'higher', '1 of 2 postcodes has medium/high homes');
+  // No postcodes found (e.g. postcodes.io down) is an error, not "Low risk area", and isn't cached.
+  await assert.rejects(fl.flood(52.5, -0.283), /postcodes/i);
 });
 
 test('Short inspections get a colour', async () => {
