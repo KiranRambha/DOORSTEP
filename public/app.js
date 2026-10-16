@@ -1,3 +1,5 @@
+import { median, chance, goodChance, isFaithSchool, crimeTrendPct } from './snapshot.js';
+
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const gbp = (n) => (n == null ? '–' : '£' + Math.round(n).toLocaleString('en-GB'));
@@ -7,7 +9,6 @@ const monthName = (iso) => new Date(iso + (iso.length === 7 ? '-01' : '')).toLoc
 const dayName = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 const fullDate = (iso) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 const daysSince = (iso) => Math.floor((Date.now() - new Date(iso)) / 864e5);
-const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
 const state = {
   place: null,
@@ -228,11 +229,6 @@ function drawTransport() {
 /* ───────────── Schools ───────────── */
 
 const CHANCE_ORDER = { in: 0, likely: 1, possible: 2, faith: 3, selective: 4, unlikely: 5, out: 6, special: 7, na: 8 };
-const chance = (s) => s.catchment?.estimate || s.catchment?.status || 'na';
-const goodChance = (s) => ['in', 'likely'].includes(chance(s));
-
-const NO_FAITH_VALUES = ['Does not apply', 'None', 'Unknown', null, undefined, ''];
-const isFaithSchool = (s) => !NO_FAITH_VALUES.includes(s.religion);
 
 function schoolsUrl() {
   const { lat, lng } = state.place;
@@ -638,7 +634,7 @@ function trendHtml() {
   const now = state.crimeCat ? c.categories.find((k) => k.category === state.crimeCat)?.count || 0 : c.total;
   const before = state.crimeCat ? c.previous.byCat[state.crimeCat] || 0 : c.previous.total;
   if (!before) return '<span class="trend none">None in the previous 12 months</span>';
-  const pct = Math.round(((now - before) / before) * 100);
+  const pct = crimeTrendPct(c, now, before);
   const dir = pct < -2 ? 'down' : pct > 2 ? 'up' : 'flat';
   const arrow = { down: '↓', up: '↑', flat: '→' }[dir];
   const words = dir === 'flat' ? 'about the same as' : `${Math.abs(pct)}% ${dir === 'down' ? 'lower than' : 'higher than'}`;
