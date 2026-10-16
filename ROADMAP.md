@@ -1,12 +1,10 @@
 # Doorstep roadmap
 
-Ideas agreed with the owner on 16 Oct 2026. None are started yet. **Suggested order: 1 and 3 first (quick, immediately useful), then 2 (bigger).** Ask the owner which to do next; don't assume.
+Ideas agreed with the owner on 16 Oct 2026. Items 1 and 3 were built on 16 Oct 2026 (see "Already done"). **Suggested next: 2 (reverse search), which can reuse the shortlist's snapshot builder.** Ask the owner which to do next; don't assume.
 
 ## Most useful for choosing a place
 
-1. **Shortlist and compare.** Save places you've looked at and compare them side by side in one table: commute, schools you'd likely get into, median detached/semi price, crime per month and trend. Could live in `data/shortlist.json` via a small API, like `catchment.json`.
 2. **Find places for me (reverse search).** Set limits (e.g. "≤75 min to Bank, a good school likely, 4-bed detached under £800k") and rank candidate towns and suburbs. This is Liveable's core paid feature. It needs a candidate list (e.g. ONS built-up areas or postcode districts within a commuting band), batched TfL journeys (rate limits, so cache heavily or use a TFL_APP_KEY), and the existing school/price logic per candidate. It's the biggest job.
-3. **Flood risk.** Environment Agency long-term flood risk (rivers and sea, surface water) for the address. It affects buying and insurance.
 
 ## Extra checks for a specific area
 
@@ -24,3 +22,6 @@ Ideas agreed with the owner on 16 Oct 2026. None are started yet. **Suggested or
 ## Already done (for context)
 
 Schools with Ofsted (3 inspection systems), catchment estimate plus saved cut-offs, faith setting, school-type labels, commute with step-by-step routes, house prices plus optional EPC room filter, crime (rings, trend, type filter, month hover, map dots), data dates on every panel, light/dark/mobile layouts.
+
+- **1. Shortlist and compare** (Oct 2026): save a snapshot of a place, compare in one table with best-in-column shading, sort, refresh, undo on remove. Design: `docs/superpowers/specs/2026-10-16-shortlist-and-flood-design.md`.
+- **3. Flood risk** (Oct 2026): rivers-and-sea area summary from EA postcode data, plus rivers-and-sea and surface-water map layers. England only.

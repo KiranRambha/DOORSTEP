@@ -1,3 +1,5 @@
+import { median, chance, goodChance, isFaithSchool, crimeTrendPct, shortlistId, buildSnapshot, mergeSnapshot, bestInColumn } from './snapshot.js';
+
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const gbp = (n) => (n == null ? '–' : '£' + Math.round(n).toLocaleString('en-GB'));
@@ -7,7 +9,6 @@ const monthName = (iso) => new Date(iso + (iso.length === 7 ? '-01' : '')).toLoc
 const dayName = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 const fullDate = (iso) => new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 const daysSince = (iso) => Math.floor((Date.now() - new Date(iso)) / 864e5);
-const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 
 const state = {
   place: null,
@@ -16,10 +17,15 @@ const state = {
   transport: null,
   prices: null,
   crime: null,
+  flood: null,
+  floodLayer: 'rivers',
   schoolPhase: 'all',
   priceType: 'all',
   showAllSales: false,
   showAllSchools: false,
+  shortlist: [],
+  slSort: null, // { col, dir: 1 | -1 }
+  slBusy: new Set(),
 };
 
 async function api(path) {
@@ -34,7 +40,8 @@ const errorBox = (e) => `<p class="error">${esc(e.message || e)}</p>`;
 
 /* ───────────── Map ───────────── */
 
-let map, layer, crimeLayer;
+let map, layer, crimeLayer, floodLayers;
+const FLOOD_MIN_ZOOM = 14;
 function initMap() {
   if (map || !window.L) return;
   map = L.map('map', { scrollWheelZoom: false });
@@ -42,8 +49,17 @@ function initMap() {
     maxZoom: 19,
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
+  // Environment Agency flood maps (England). Both use the same blues, so only one is shown at a time.
+  const EA = 'https://environment.data.gov.uk/spatialdata';
+  // The EA only draws these at about 1:50,000 or closer, which is zoom 14 and up.
+  const wms = (svc, layers) => L.tileLayer.wms(`${EA}/${svc}/wms`, { layers, format: 'image/png', transparent: true, opacity: 0.65, version: '1.3.0', minZoom: FLOOD_MIN_ZOOM, attribution: 'Flood risk © Environment Agency' });
+  floodLayers = {
+    rivers: wms('nafra2-risk-of-flooding-from-rivers-and-sea', 'rofrs_4band'),
+    surface: wms('nafra2-risk-of-flooding-from-surface-water', 'rofsw'),
+  };
   crimeLayer = L.layerGroup().addTo(map);
   layer = L.layerGroup().addTo(map);
+  map.on('zoomend', floodZoomHint);
 }
 
 const toneColour = (tone) => getComputedStyle(document.documentElement).getPropertyValue(`--${tone || 'none'}`).trim();
@@ -99,6 +115,10 @@ function drawGlance() {
   const c = state.crime;
   if (c && !c.error && c.monthsCounted) {
     items.push(['Crimes per month', Math.round(c.total / c.monthsCounted).toLocaleString('en-GB'), 'within about a mile']);
+  }
+  const f = state.flood;
+  if (f?.ready) {
+    items.push(['Flood risk', f.covered ? esc(f.label) : '–', f.covered ? `${f.medHigh.toLocaleString('en-GB')} homes at medium/high risk nearby` : 'no data for Wales']);
   }
   const sc = state.schools;
   if (sc?.ready) {
@@ -212,11 +232,6 @@ function drawTransport() {
 /* ───────────── Schools ───────────── */
 
 const CHANCE_ORDER = { in: 0, likely: 1, possible: 2, faith: 3, selective: 4, unlikely: 5, out: 6, special: 7, na: 8 };
-const chance = (s) => s.catchment?.estimate || s.catchment?.status || 'na';
-const goodChance = (s) => ['in', 'likely'].includes(chance(s));
-
-const NO_FAITH_VALUES = ['Does not apply', 'None', 'Unknown', null, undefined, ''];
-const isFaithSchool = (s) => !NO_FAITH_VALUES.includes(s.religion);
 
 function schoolsUrl() {
   const { lat, lng } = state.place;
@@ -622,7 +637,7 @@ function trendHtml() {
   const now = state.crimeCat ? c.categories.find((k) => k.category === state.crimeCat)?.count || 0 : c.total;
   const before = state.crimeCat ? c.previous.byCat[state.crimeCat] || 0 : c.previous.total;
   if (!before) return '<span class="trend none">None in the previous 12 months</span>';
-  const pct = Math.round(((now - before) / before) * 100);
+  const pct = crimeTrendPct(c, now, before);
   const dir = pct < -2 ? 'down' : pct > 2 ? 'up' : 'flat';
   const arrow = { down: '↓', up: '↑', flat: '→' }[dir];
   const words = dir === 'flat' ? 'about the same as' : `${Math.abs(pct)}% ${dir === 'down' ? 'lower than' : 'higher than'}`;
@@ -762,6 +777,360 @@ function drawCrimeMap() {
   }
 }
 
+/* ───────────── Flood risk ───────────── */
+
+const FLOOD_BANDS = [
+  ['high', 'High', 'more than a 3.3% chance a year'],
+  ['medium', 'Medium', '1% to 3.3% a year'],
+  ['low', 'Low', '0.1% to 1% a year'],
+  ['veryLow', 'Very low', 'less than 0.1% a year'],
+];
+
+function drawFlood() {
+  const body = $('#flood-body');
+  const f = state.flood;
+  if (!f) return (body.innerHTML = loading('Checking Environment Agency flood data…'));
+  if (f.error) return (body.innerHTML = errorBox(f.error));
+  if (!f.ready) return (body.innerHTML = `<p class="note">${esc(f.message)}</p>`);
+  $('#flood-sub').textContent = `Rivers and sea · Environment Agency data as at ${monthName(f.fileDate)} · an area estimate, not for a single house`;
+  if (!f.covered) {
+    return (body.innerHTML = '<p><span class="chip">No data</span></p><p class="note">The Environment Agency covers England only, so there are no flood figures for Wales. Natural Resources Wales publishes its own flood map.</p>');
+  }
+  const n = (x) => x.toLocaleString('en-GB');
+  const max = Math.max(...FLOOD_BANDS.map(([k]) => f.homes[k]), 1);
+  const bars = FLOOD_BANDS.map(([k, name, odds]) => `<div class="fl-row">
+      <span class="fl-name"><i class="sw fl-${k === 'veryLow' ? 'vlow' : k}"></i>${name}<small>${odds}</small></span>
+      <span class="fl-bar"><i style="width:${(f.homes[k] / max) * 100}%"></i></span>
+      <span class="num">${n(f.homes[k])}</span>
+    </div>`).join('');
+  body.innerHTML = `<div class="fl-head">
+      <span class="chip flood-${f.verdict}">${esc(f.label)}</span>
+      <p><strong class="num">${n(f.medHigh)}</strong> home${f.medHigh === 1 ? '' : 's'} at medium or high risk within about 1 km</p>
+    </div>
+    <div class="fl-bars" aria-label="Homes by flood risk band">${bars}</div>
+    <p class="note">${n(f.postcodesAtRisk)} of ${n(f.postcodesChecked)} nearby postcodes have homes in a flood risk area.${f.partial ? ' Welsh postcodes nearby aren\'t included.' : ''}
+      Surface water (heavy rain that can't drain away) isn't in these numbers. Turn on the map to see it.</p>`;
+}
+
+function drawFloodMap() {
+  if (!map || !floodLayers) return;
+  const on = $('#flood-on-map')?.checked;
+  $('#flood-layer').hidden = !on;
+  for (const [k, l] of Object.entries(floodLayers)) {
+    const want = on && k === state.floodLayer;
+    if (want && !map.hasLayer(l)) l.addTo(map);
+    if (!want && map.hasLayer(l)) map.removeLayer(l);
+  }
+  for (const li of document.querySelectorAll('.legend .flood-key')) li.toggleAttribute('hidden', !on);
+  // Surface water has no "very low" band.
+  if (on && state.floodLayer === 'surface') $('.legend .flood-key-vlow').hidden = true;
+  $('#flood-key-name').textContent = state.floodLayer === 'surface' ? 'Surface water' : 'Rivers and sea';
+  floodZoomHint();
+}
+
+function floodZoomHint() {
+  const hint = $('.legend .flood-zoom');
+  if (hint) hint.hidden = !$('#flood-on-map')?.checked || map.getZoom() >= FLOOD_MIN_ZOOM;
+}
+
+/* ───────────── Shortlist ───────────── */
+
+async function apiSend(method, path, body, { keepalive = false } = {}) {
+  const res = await fetch(path, { method, keepalive, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(out.error || `Request failed (${res.status})`);
+  return out;
+}
+
+/** The page settings a snapshot depends on, so a refresh can repeat them. */
+function currentSettings() {
+  return {
+    dest: $('#dest').value,
+    faith: $('#school-faith').value,
+    hideFaith: $('#school-hide-faith').checked,
+    schoolRadius: Number($('#school-radius').value),
+    priceRadius: Number($('#price-radius').value),
+    priceYears: Number($('#price-years').value),
+    priceSize: Number($('#price-size').value) || 0,
+  };
+}
+
+/** Load everything for a saved place with its own settings, without touching the page. */
+async function fetchPlaceData(e) {
+  const { lat, lng } = e;
+  const st = e.settings || {};
+  const get = (url) => api(url).catch((err) => ({ error: err.message }));
+  const [transport, schools, prices, crime, flood] = await Promise.all([
+    get(`/api/transport?lat=${lat}&lng=${lng}&dest=${encodeURIComponent(st.dest || 'bank')}`),
+    get(`/api/schools?lat=${lat}&lng=${lng}&radius=5000${st.faith ? `&faith=${encodeURIComponent(st.faith)}` : ''}`),
+    get(`/api/prices?lat=${lat}&lng=${lng}&radius=${st.priceRadius || 1000}&years=${st.priceYears || 3}`),
+    get(`/api/crime?lat=${lat}&lng=${lng}`),
+    get(`/api/flood?lat=${lat}&lng=${lng}`),
+  ]);
+  return { transport, schools, prices, crime, flood };
+}
+
+const isSaved = () => state.place && state.shortlist.some((e) => e.id === shortlistId(state.query));
+
+function drawSaveButton() {
+  const b = $('#save-place');
+  const on = Boolean(isSaved());
+  b.setAttribute('aria-pressed', String(on));
+  b.textContent = on ? '★ Saved' : '☆ Save to shortlist';
+  b.title = on ? 'Remove from your shortlist' : 'Save a snapshot of this place to compare later';
+  $('#shortlist-link').textContent = state.shortlist.length ? `Shortlist (${state.shortlist.length})` : 'Shortlist';
+}
+
+let saving = false;
+async function toggleSave() {
+  const q = state.query;
+  const id = shortlistId(q);
+  // Saving again during the undo window just undoes the removal.
+  if (pendingRemoval?.id === id) return pendingRemoval.undo();
+  const entry = state.shortlist.find((e) => e.id === id);
+  if (entry) return removeWithUndo(entry);
+  if (saving) return;
+  saving = true;
+  $('#save-place').disabled = true;
+  const settings = currentSettings();
+  try {
+    const { saved } = await apiSend('POST', '/api/shortlist', {
+      query: q, label: state.place.label, area: state.place.area, lat: state.place.lat, lng: state.place.lng, country: state.place.country,
+      settings, snapshot: buildSnapshot(state, settings),
+    });
+    const i = state.shortlist.findIndex((e) => e.id === saved.id);
+    if (i >= 0) state.shortlist[i] = saved; else state.shortlist.push(saved);
+    showToast(`Saved ${saved.label} to your shortlist.`);
+  } catch (e) {
+    showToast(`Couldn't save: ${e.message}`);
+  }
+  saving = false;
+  $('#save-place').disabled = false;
+  drawSaveButton();
+}
+
+let toastTimer = null;
+function showToast(msg, action) {
+  const t = $('#toast');
+  // A new message replaces an undo offer, so that removal goes ahead now.
+  pendingRemoval?.commit();
+  clearTimeout(toastTimer);
+  t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button type="button">${esc(action.label)}</button>` : ''}`;
+  t.hidden = false;
+  if (action) t.querySelector('button').addEventListener('click', () => { clearTimeout(toastTimer); t.hidden = true; action.run(); });
+  toastTimer = setTimeout(() => { t.hidden = true; action?.timeout?.(); }, action ? 6000 : 3000);
+}
+
+let pendingRemoval = null;
+/** Hide the place straight away, and only delete it once the 6-second undo has passed. */
+function removeWithUndo(entry) {
+  const i = state.shortlist.indexOf(entry);
+  state.shortlist.splice(i, 1);
+  let done = false;
+  const commit = () => {
+    if (done) return;
+    done = true;
+    pendingRemoval = null;
+    // keepalive lets the request finish even if the page is closing.
+    apiSend('DELETE', `/api/shortlist?id=${encodeURIComponent(entry.id)}`, null, { keepalive: true }).catch((e) => {
+      state.shortlist.splice(Math.min(i, state.shortlist.length), 0, entry);
+      showToast(`Couldn't remove it: ${e.message}`);
+      redrawShortlistBits();
+    });
+  };
+  const undo = () => {
+    if (done) return;
+    done = true;
+    pendingRemoval = null;
+    clearTimeout(toastTimer);
+    $('#toast').hidden = true;
+    state.shortlist.splice(Math.min(i, state.shortlist.length), 0, entry);
+    redrawShortlistBits();
+  };
+  showToast(`Removed ${entry.label}.`, { label: 'Undo', run: undo, timeout: commit });
+  pendingRemoval = { id: entry.id, commit, undo };
+  redrawShortlistBits();
+}
+// Don't lose a removal if the page is closed during the undo window.
+addEventListener('pagehide', () => pendingRemoval?.commit());
+
+function redrawShortlistBits() {
+  drawSaveButton();
+  if (!$('#shortlist').hidden) drawShortlist();
+}
+
+async function refreshEntry(entry) {
+  state.slBusy.add(entry.id);
+  drawShortlist();
+  try {
+    const fresh = buildSnapshot(await fetchPlaceData(entry), entry.settings || {});
+    // Removed while the data was loading: don't bring it back.
+    if (!state.shortlist.some((e) => e.id === entry.id)) return;
+    const { saved } = await apiSend('POST', '/api/shortlist?refresh=1', { ...entry, snapshot: mergeSnapshot(entry.snapshot, fresh) });
+    const i = state.shortlist.findIndex((e) => e.id === entry.id);
+    if (i >= 0) state.shortlist[i] = saved;
+  } catch (e) {
+    if (state.shortlist.some((x) => x.id === entry.id)) showToast(`Couldn't refresh ${entry.label}: ${e.message}`);
+  } finally {
+    state.slBusy.delete(entry.id);
+    drawShortlist();
+  }
+}
+
+async function refreshAll() {
+  const b = $('#sl-refresh-all');
+  b.disabled = true;
+  // One at a time, to stay kind to TfL.
+  for (const e of [...state.shortlist]) {
+    if (state.shortlist.includes(e)) await refreshEntry(e);
+  }
+  b.disabled = false;
+}
+
+const shortDay = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+// Sort keys (lower first). Schools you'd likely get into sort ahead of fallbacks.
+const SL_SORT = {
+  place: (e) => e.label.toLowerCase(),
+  walk: (e) => e.snapshot.transport?.station?.walkMin,
+  door: (e) => e.snapshot.transport?.door?.minutes,
+  primary: (e) => { const p = e.snapshot.schools?.primary; return p ? p.distance + (p.likely ? 0 : 1e6) : null; },
+  secondary: (e) => { const p = e.snapshot.schools?.secondary; return p ? p.distance + (p.likely ? 0 : 1e6) : null; },
+  detached: (e) => e.snapshot.prices?.detached?.median,
+  semi: (e) => e.snapshot.prices?.semi?.median,
+  crime: (e) => e.snapshot.crime?.perMonth,
+  flood: (e) => (e.snapshot.flood?.covered ? e.snapshot.flood.medHigh : null),
+};
+const SL_COLS = [
+  ['place', 'Place'], ['walk', 'Nearest station'], ['door', 'Commute'], ['primary', 'Outstanding primary'], ['secondary', 'Outstanding secondary'],
+  ['detached', 'Median detached'], ['semi', 'Median semi'], ['crime', 'Crime'], ['flood', 'Flood risk'],
+];
+
+function sortedShortlist() {
+  const list = [...state.shortlist];
+  const s = state.slSort;
+  if (!s) return list;
+  const key = SL_SORT[s.col];
+  // Rows without a value always go last.
+  return list.sort((a, b) => {
+    const x = key(a), y = key(b);
+    if (x == null || y == null) return (x == null) - (y == null);
+    return (x < y ? -1 : x > y ? 1 : 0) * s.dir;
+  });
+}
+
+function slCell(e, col, best) {
+  const sn = e.snapshot || {};
+  const day = (e.refreshedAt || e.savedAt || '').slice(0, 10);
+  // A section kept from an earlier refresh because this one failed.
+  const from = (sec) => (sec?.asOf && sec.asOf < day ? `<small class="stale">from ${shortDay(sec.asOf)}</small>` : '');
+  const cls = best[col]?.includes(e.id) ? ' class="best"' : '';
+  const td = (html) => `<td${cls}>${html}</td>`;
+  const none = td('<span class="main">–</span>');
+  switch (col) {
+    case 'walk': {
+      const t = sn.transport;
+      if (!t) return none;
+      if (!t.station) return td(`<span class="main">None nearby</span>${from(t)}`);
+      return td(`<span class="main">${esc(t.station.name)}</span><small>${dist(Number(t.station.distance))} · ${Number(t.station.walkMin)} min walk</small>${from(t)}`);
+    }
+    case 'door': {
+      const t = sn.transport;
+      if (!t?.door) return none;
+      const ch = Number(t.door.changes) || 0;
+      return td(`<span class="main">${Number(t.door.minutes)} min</span><small>${ch ? `${ch} change${ch === 1 ? '' : 's'}` : 'direct'} · to ${esc(String(t.destination || '').split(' (')[0])}</small>${from(t)}`);
+    }
+    case 'primary':
+    case 'secondary': {
+      const sc = sn.schools;
+      if (!sc) return none;
+      const p = sc[col];
+      if (!p) return td(`<span class="main">None</span><small>within ${dist(Number(sc.radius))}</small>${from(sc)}`);
+      const [head] = splitLabel(p.label);
+      return td(`<span class="main">${esc(p.name)}</span><small>${dist(Number(p.distance))} away</small><span class="chip ${esc(p.estimate)}">${esc(head)}</span>${p.likely ? '' : '<small>no likely Outstanding school</small>'}${from(sc)}`);
+    }
+    case 'detached':
+    case 'semi': {
+      const pr = sn.prices;
+      const v = pr?.[col];
+      if (!v) return none;
+      const opts = [pr.radiusM ? `${Number(pr.radiusM) / 1000} km` : '', pr.years ? `${Number(pr.years)} yrs` : '', pr.sizeMin ? `${Number(pr.sizeMin)}+ rooms` : ''].filter(Boolean).join(' · ');
+      const n = Number(v.count) || 0;
+      return td(`<span class="main">${gbpShort(Number(v.median))}</span><small>${n} sale${n === 1 ? '' : 's'}${opts ? ` · ${opts}` : ''}</small>${from(pr)}`);
+    }
+    case 'crime': {
+      const c = sn.crime;
+      if (!c) return none;
+      const pct = c.trendPct == null ? null : Number(c.trendPct);
+      const trend = pct == null ? 'no trend yet' : pct < -2 ? `↓ ${Math.abs(pct)}% on last year` : pct > 2 ? `↑ ${pct}% on last year` : '→ about the same';
+      return td(`<span class="main">${Math.round(Number(c.perMonth)).toLocaleString('en-GB')} a month</span><small>${trend}</small>${from(c)}`);
+    }
+    case 'flood': {
+      const f = sn.flood;
+      if (!f) return none;
+      if (!f.covered) return td('<span class="chip">No data</span><small>Wales not covered</small>');
+      return td(`<span class="chip flood-${esc(f.verdict)}">${esc(f.label)}</span><small>${Number(f.medHigh).toLocaleString('en-GB')} homes medium/high</small>${from(f)}`);
+    }
+  }
+  return none;
+}
+
+function drawShortlist() {
+  const body = $('#sl-body');
+  $('#sl-refresh-all').hidden = !state.shortlist.length;
+  if (!state.shortlist.length) {
+    body.innerHTML = '<div class="sl-wrap"><p class="empty">Nothing saved yet. Look up a place and press ☆ Save to shortlist.</p></div>';
+    return;
+  }
+  const best = bestInColumn(state.shortlist);
+  const s = state.slSort;
+  const head = SL_COLS.map(([k, label]) => {
+    const sorted = s?.col === k;
+    return `<th${sorted ? ` aria-sort="${s.dir > 0 ? 'ascending' : 'descending'}"` : ''}><button type="button" data-sort="${k}">${label}${sorted ? (s.dir > 0 ? ' ↑' : ' ↓') : ''}</button></th>`;
+  }).join('') + '<th><span class="sr">Actions</span></th>';
+  const rows = sortedShortlist().map((e) => {
+    const busy = state.slBusy.has(e.id);
+    const when = e.refreshedAt || e.savedAt;
+    const old = when && daysSince(when) > 90 ? ' · <span class="stale">may be out of date</span>' : '';
+    const href = `?q=${encodeURIComponent(e.query)}&dest=${encodeURIComponent(e.settings?.dest || 'bank')}`;
+    return `<tr data-id="${esc(e.id)}"${busy ? ' class="busy"' : ''}>
+      <td class="sl-place"><a href="${href}">${esc(e.label)}</a><small>${esc(e.area || '')}</small><small>${busy ? 'Refreshing…' : `updated ${shortDay(when)}`}${old}</small></td>
+      ${SL_COLS.slice(1).map(([k]) => slCell(e, k, best)).join('')}
+      <td class="actions"><button type="button" class="btn small" data-act="refresh"${busy ? ' disabled' : ''}>Refresh</button>
+        <button type="button" class="btn icon" data-act="remove" aria-label="Remove ${esc(e.label)}" title="Remove">✕</button></td>
+    </tr>`;
+  }).join('');
+  body.innerHTML = `<div class="sl-wrap"><table class="sl"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function showView() {
+  const params = new URLSearchParams(location.search);
+  const list = params.get('view') === 'shortlist';
+  $('#shortlist').hidden = !list;
+  if (list) $('#shortlist-link').setAttribute('aria-current', 'page');
+  else $('#shortlist-link').removeAttribute('aria-current');
+  if (list) {
+    $('#intro').hidden = true;
+    $('#results').hidden = true;
+    document.title = 'Shortlist · Doorstep';
+    drawShortlist();
+    return;
+  }
+  const q = params.get('q');
+  if (q && state.place) {
+    $('#results').hidden = false;
+    document.title = `${state.place.label} · Doorstep`;
+    map?.invalidateSize();
+  } else if (q) {
+    $('#q').value = q;
+    search(q);
+  } else {
+    $('#intro').hidden = false;
+    $('#results').hidden = true;
+    document.title = 'Doorstep';
+  }
+}
+
 /* ───────────── Loading data ───────────── */
 
 function drawAll() {
@@ -770,8 +1139,10 @@ function drawAll() {
   drawSchools();
   drawPrices();
   drawCrime();
+  drawFlood();
   drawMap();
   drawCrimeMap();
+  drawFloodMap();
 }
 
 async function loadSection(key, url) {
@@ -800,13 +1171,19 @@ async function search(q) {
   try {
     const place = await api(`/api/lookup?q=${encodeURIComponent(q)}`);
     state.place = place;
-    Object.assign(state, { crimeCat: null, schools: null, transport: null, prices: null, crime: null, showAllSchools: false, showAllSales: false });
+    state.query = q.trim();
+    Object.assign(state, { crimeCat: null, schools: null, transport: null, prices: null, crime: null, flood: null, showAllSchools: false, showAllSales: false });
     $('#intro').hidden = true;
+    $('#shortlist').hidden = true;
+    $('#shortlist-link').removeAttribute('aria-current');
     $('#results').hidden = false;
     $('#place-name').textContent = place.label;
     $('#place-area').textContent = place.area || '';
     document.title = `${place.label} · Doorstep`;
-    history.replaceState(null, '', `?q=${encodeURIComponent(q)}&dest=${$('#dest').value}`);
+    const url = `?q=${encodeURIComponent(q)}&dest=${$('#dest').value}`;
+    if (new URLSearchParams(location.search).get('view')) history.pushState(null, '', url);
+    else history.replaceState(null, '', url);
+    drawSaveButton();
     initMap();
     map?.invalidateSize();
     drawAll();
@@ -816,6 +1193,7 @@ async function search(q) {
       loadTransport(),
       loadPrices(),
       loadSection('crime', `/api/crime?lat=${lat}&lng=${lng}`),
+      loadSection('flood', `/api/flood?lat=${lat}&lng=${lng}`),
     ]);
   } catch (e) {
     $('#intro').hidden = false;
@@ -878,15 +1256,50 @@ async function boot() {
     store.set('doorstep.hideFaith', $('#school-hide-faith').checked ? '1' : '0');
     drawSchools(); drawMap();
   });
+  $('#flood-on-map').addEventListener('change', () => {
+    drawFloodMap();
+    if ($('#flood-on-map').checked && map && state.place && map.getZoom() < FLOOD_MIN_ZOOM) {
+      map.setView([state.place.lat, state.place.lng], FLOOD_MIN_ZOOM);
+      document.querySelector('.col-map')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  });
+  segmented('#flood-layer', (v) => { state.floodLayer = v; drawFloodMap(); });
   segmented('#price-type', (v) => { state.priceType = v; drawPrices(); });
   $('#price-radius').addEventListener('change', loadPrices);
   $('#price-years').addEventListener('change', loadPrices);
   $('#price-size').addEventListener('change', () => { drawPrices(); drawGlance(); });
 
-  if (params.get('q')) {
-    $('#q').value = params.get('q');
-    search(params.get('q'));
+  $('#save-place').addEventListener('click', toggleSave);
+  $('#shortlist-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    history.pushState(null, '', '?view=shortlist');
+    showView();
+  });
+  $('#sl-refresh-all').addEventListener('click', refreshAll);
+  $('#sl-body').addEventListener('click', (e) => {
+    const sort = e.target.closest('[data-sort]')?.dataset.sort;
+    if (sort) {
+      const s = state.slSort;
+      state.slSort = s?.col === sort ? (s.dir > 0 ? { col: sort, dir: -1 } : null) : { col: sort, dir: 1 };
+      return drawShortlist();
+    }
+    const act = e.target.closest('[data-act]');
+    if (!act) return;
+    const entry = state.shortlist.find((x) => x.id === act.closest('tr').dataset.id);
+    if (!entry) return;
+    if (act.dataset.act === 'refresh') refreshEntry(entry);
+    else removeWithUndo(entry);
+  });
+  addEventListener('popstate', showView);
+
+  try {
+    state.shortlist = (await api('/api/shortlist')).entries;
+  } catch (e) {
+    state.shortlist = [];
+    showToast(`Couldn't load your shortlist: ${e.message}`);
   }
+  drawSaveButton();
+  showView();
 }
 
 boot();
