@@ -41,6 +41,11 @@ test('price: cheap check rules out, or asks for EPC when the budget is raised', 
   assert.equal(priceVerdict(skipped, { allowanceMin: 15, budget: 950000 }).status, 'needs-epc');
 });
 
+test('price: a station with no sales is unknown, not a refetch loop', () => {
+  const none = { allSizesMedian: null, epc: { enabled: true, ran: false, error: null }, sales: [] };
+  assert.equal(priceVerdict(none, { allowanceMin: 15, budget: 800000 }).status, 'unknown');
+});
+
 test('price: without an EPC token, all detached and semi sales count and say so', () => {
   const p = { allSizesMedian: 600000, epc: { enabled: false, ran: false, error: null }, sales: five(600000).map((s) => ({ ...s, rooms: null })) };
   const v = priceVerdict(p, { allowanceMin: 15, budget: 700000 });
@@ -150,4 +155,84 @@ test('find: missing stations.json asks for setup', async () => {
   const r = findStations(null);
   assert.equal(r.ready, false);
   assert.match(r.message, /npm run setup:stations/);
+});
+
+/* ───────── /api/find/price: one station's sales, EPC only when needed ───────── */
+
+function priceMocks(flags) {
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.includes('api.postcodes.io/postcodes?lat=')) {
+      if (flags.postcodesDown) return json({ error: 'down' }, 500);
+      return json({ result: [
+        { postcode: 'AL5 1AA', latitude: HARPENDEN.lat + 0.001, longitude: HARPENDEN.lng, country: 'England' }, // ~110 m
+        { postcode: 'AL5 2BB', latitude: HARPENDEN.lat + 0.0063, longitude: HARPENDEN.lng, country: 'England' }, // ~700 m
+      ] });
+    }
+    if (u.includes('landregistry.data.gov.uk')) {
+      const b = (paon, pc, amount) => ({ tx: { value: `tx-${paon}` }, amount: { value: String(amount) }, date: { value: '2026-05-01' },
+        type: { value: 'http://landregistry.data.gov.uk/def/common/detached' }, paon: { value: paon }, street: { value: 'HIGH STREET' },
+        pc: { value: pc }, category: { value: 'http://landregistry.data.gov.uk/def/ppi/standardPricePaidTransaction' } });
+      return json({ results: { bindings: [
+        b('1', 'AL5 1AA', 600000), b('2', 'AL5 1AA', 650000), b('3', 'AL5 1AA', 700000),
+        b('4', 'AL5 1AA', 750000), b('5', 'AL5 1AA', 800000), b('6', 'AL5 2BB', 900000),
+      ] } });
+    }
+    if (u.includes('get-energy-performance-data')) {
+      flags.epcCalls++;
+      if (flags.epcDown) return json({ error: 'down' }, 503);
+      if (u.includes('/api/domestic/search')) {
+        const pc = decodeURIComponent(new URL(u).searchParams.get('postcode')).replace('+', ' ');
+        const paons = pc === 'AL5 1AA' ? ['1', '2', '3', '4', '5'] : ['6'];
+        return json({ data: paons.map((p) => ({ certificateNumber: `C${p}`, addressLine1: `${p} HIGH STREET`, registrationDate: '2025-01-01' })) });
+      }
+      return json({ data: { habitable_room_count: 6, total_floor_area: 140 } });
+    }
+    throw new Error('Unexpected URL in test: ' + u);
+  };
+}
+
+test('station price: distances attached, EPC skipped when everything is over budget', async () => {
+  process.env.EPC_TOKEN = 'test';
+  const flags = { epcCalls: 0 };
+  priceMocks(flags);
+  const tmp = tempProject({ 'stations.json': STATIONS_FILE });
+  const { stationPrice } = await import(path.join(tmp, 'lib', 'stations.mjs'));
+  const r = await stationPrice('9100HRPNDN', 300000);
+  assert.equal(r.allSizesMedian, 725000);
+  assert.equal(r.epc.enabled, true);
+  assert.equal(r.epc.ran, false);
+  assert.equal(flags.epcCalls, 0);
+  assert.equal(r.sales.length, 6);
+  assert.ok(r.sales.every((s) => Number.isFinite(s.distance)));
+  assert.ok(r.sales.find((s) => s.price === 900000).distance > 600);
+});
+
+test('station price: EPC runs when the budget could pass, and an outage is flagged not cached', async () => {
+  process.env.EPC_TOKEN = 'test';
+  const flags = { epcCalls: 0, epcDown: true };
+  priceMocks(flags);
+  const tmp = tempProject({ 'stations.json': STATIONS_FILE });
+  const { stationPrice } = await import(path.join(tmp, 'lib', 'stations.mjs'));
+  const r = await stationPrice('9100HRPNDN', 900000);
+  assert.equal(r.epc.ran, true);
+  assert.match(r.epc.error, /isn't responding/);
+  flags.epcDown = false;
+  const again = await stationPrice('9100HRPNDN', 900000);
+  assert.equal(again.epc.error, null);
+  assert.equal(again.sales.filter((s) => s.rooms >= 5).length, 6);
+});
+
+test('station price: no postcodes is an error and is not cached', async () => {
+  delete process.env.EPC_TOKEN;
+  const flags = { epcCalls: 0, postcodesDown: true };
+  priceMocks(flags);
+  const tmp = tempProject({ 'stations.json': STATIONS_FILE });
+  const { stationPrice } = await import(path.join(tmp, 'lib', 'stations.mjs'));
+  await assert.rejects(stationPrice('9100HRPNDN', 900000), /Couldn't look up postcodes/);
+  flags.postcodesDown = false;
+  const r = await stationPrice('9100HRPNDN', 900000);
+  assert.equal(r.sales.length, 6);
+  assert.equal(r.epc.enabled, false);
+  await assert.rejects(stationPrice('NOPE', 900000), /Unknown station/);
 });

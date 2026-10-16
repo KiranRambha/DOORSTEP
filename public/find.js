@@ -25,6 +25,7 @@ export function priceVerdict(p, { allowanceMin, budget }) {
   const out = (status, reason, extra = {}) => ({ status, reason, median: null, count: 0, allSizes: false, ...extra });
   if (!p || p.error) return out('unknown', p?.error || 'Price not checked');
   const epc = p.epc || {};
+  if (!p.sales?.length) return out('unknown', 'No sales nearby');
   if (epc.enabled && !epc.ran) {
     return p.allSizesMedian > budget ? out('over', 'Every house nearby is over budget') : out('needs-epc', 'Checking room counts…');
   }
