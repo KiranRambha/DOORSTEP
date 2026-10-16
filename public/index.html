@@ -24,6 +24,7 @@
         <select id="dest" name="dest" title="Where you commute to"></select>
         <button type="submit">Look up</button>
       </form>
+      <a id="find-link" class="top-link" href="?view=find">Find places</a>
       <a id="shortlist-link" class="top-link" href="?view=shortlist">Shortlist</a>
     </div>
   </header>
@@ -205,6 +206,31 @@
       </div>
       <p class="sub">Each row is a snapshot from when you saved or last refreshed it. Green marks the best in each column. Click a heading to sort.</p>
       <div id="sl-body"></div>
+    </section>
+    <section id="find" class="find" hidden>
+      <div class="sl-head">
+        <div>
+          <p class="eyebrow">Where should I look?</p>
+          <h1>Find places</h1>
+        </div>
+      </div>
+      <div class="fp-settings">
+        <label class="mini">Door to door <select id="fp-door"></select></label>
+        <label class="mini">Walk to the station <select id="fp-walk"></select></label>
+        <label class="mini">Budget <select id="fp-budget"></select></label>
+        <label class="mini">Your faith <select id="fp-faith" title="Used to estimate your chances at faith schools. Shared with the Schools panel."></select></label>
+      </div>
+      <p class="sub">Stations outside London where a walk plus the train to a central London terminus fits your door-to-door time, with a Good or Outstanding primary and secondary you'd likely get into, and a typical 4-bed (detached or semi) under your budget.</p>
+      <div class="fp-layout">
+        <div class="fp-list-col">
+          <p class="fp-progress" id="fp-progress" aria-live="polite"></p>
+          <div id="fp-banner"></div>
+          <ol class="fp-list" id="fp-list"></ol>
+          <details class="fp-unknown" id="fp-unknown" hidden><summary></summary><ul></ul></details>
+          <p class="sub fp-dates" id="fp-dates"></p>
+        </div>
+        <div class="fp-map-col"><div id="find-map" role="img" aria-label="Map of matching stations"></div></div>
+      </div>
     </section>
   </main>
 

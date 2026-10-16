@@ -1,3 +1,4 @@
+import { initFind, showFind } from './find-view.js';
 import { median, chance, goodChance, isFaithSchool, crimeTrendPct, shortlistId, buildSnapshot, mergeSnapshot, bestInColumn, faithLabel, faithSettingsDiffer } from './snapshot.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -1116,9 +1117,20 @@ function drawShortlist() {
 function showView() {
   const params = new URLSearchParams(location.search);
   const list = params.get('view') === 'shortlist';
+  const find = params.get('view') === 'find';
   $('#shortlist').hidden = !list;
+  $('#find').hidden = !find;
   if (list) $('#shortlist-link').setAttribute('aria-current', 'page');
   else $('#shortlist-link').removeAttribute('aria-current');
+  if (find) $('#find-link').setAttribute('aria-current', 'page');
+  else $('#find-link').removeAttribute('aria-current');
+  if (find) {
+    $('#intro').hidden = true;
+    $('#results').hidden = true;
+    document.title = 'Find places · Doorstep';
+    showFind();
+    return;
+  }
   if (list) {
     $('#intro').hidden = true;
     $('#results').hidden = true;
@@ -1185,7 +1197,9 @@ async function search(q) {
     Object.assign(state, { crimeCat: null, schools: null, transport: null, prices: null, crime: null, flood: null, showAllSchools: false, showAllSales: false });
     $('#intro').hidden = true;
     $('#shortlist').hidden = true;
+    $('#find').hidden = true;
     $('#shortlist-link').removeAttribute('aria-current');
+    $('#find-link').removeAttribute('aria-current');
     $('#results').hidden = false;
     $('#place-name').textContent = place.label;
     $('#place-area').textContent = place.area || '';
@@ -1214,6 +1228,15 @@ async function search(q) {
   } finally {
     btn.disabled = false;
   }
+}
+
+/** Open a place from Find places, with the commute set to that station's terminus. */
+function openPlace(postcode, dest) {
+  if ([...$('#dest').options].some((o) => o.value === dest)) $('#dest').value = dest;
+  $('#q').value = postcode;
+  $('#search-error')?.remove();
+  window.scrollTo(0, 0);
+  search(postcode);
 }
 
 /* ───────────── Wiring ───────────── */
@@ -1280,6 +1303,15 @@ async function boot() {
   $('#price-size').addEventListener('change', () => { drawPrices(); drawGlance(); });
 
   $('#save-place').addEventListener('click', toggleSave);
+  initFind({
+    api, esc, gbpShort, dist, store, openPlace,
+    destName: (key) => (state.config.destinations.find((x) => x.key === key)?.name || key).split(' (')[0],
+  });
+  $('#find-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    history.pushState(null, '', '?view=find');
+    showView();
+  });
   $('#shortlist-link').addEventListener('click', (e) => {
     e.preventDefault();
     history.pushState(null, '', '?view=shortlist');

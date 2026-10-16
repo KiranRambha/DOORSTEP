@@ -466,3 +466,53 @@ table.sl tr.busy td { opacity: .55; }
 /* Pills sit on the green "best" shading, so give them their own background to stay readable. */
 table.sl td.best .chip { background: var(--surface); }
 table.sl td.best .chip.in, table.sl td.best .chip.likely, table.sl td.best .chip.flood-low { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+
+/* Find places */
+.find { padding-block: 24px 48px; display: grid; gap: 14px; }
+.find > .sub { margin: 0; color: var(--muted); font-size: 13.5px; max-width: 760px; }
+.fp-settings { display: flex; gap: 10px 18px; flex-wrap: wrap; }
+.fp-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 0.85fr); gap: 20px; align-items: start; }
+.fp-progress { margin: 0 0 10px; font-size: 14px; }
+.fp-progress .muted, .muted { color: var(--muted); }
+.fp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.fp-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 4px 14px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.fp-row:hover, .fp-row.hot { border-color: var(--accent); }
+.fp-row.pending { opacity: .75; }
+.fp-num { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+.fp-num.muted { background: var(--line); color: var(--muted); }
+.fp-main { min-width: 0; }
+.fp-main h3 { font-size: 18px; line-height: 1.2; }
+.fp-commute { margin: 2px 0 8px; font-size: 14px; }
+.fp-commute small, .fp-price small, .fp-school small, .fp-unknown small { display: block; color: var(--muted); font-size: 12px; }
+.fp-schools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
+.fp-school { min-width: 0; font-size: 13px; }
+.fp-phase { display: block; color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; }
+.fp-sname { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fp-side { display: grid; gap: 8px; justify-items: end; align-content: start; text-align: right; }
+.fp-price .main { font-family: var(--display); font-weight: 700; font-size: 20px; }
+.fp-price .loading { font-size: 13px; white-space: nowrap; }
+.fp-empty { color: var(--muted); padding: 14px 0; }
+.fp-unknown { margin-top: 14px; font-size: 14px; }
+.fp-unknown summary { cursor: pointer; color: var(--muted); }
+.fp-unknown ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; }
+.fp-dates { margin-top: 14px !important; font-size: 12.5px !important; }
+.fp-map-col { position: sticky; top: 84px; }
+#find-map { isolation: isolate; height: calc(100vh - 150px); min-height: 420px; max-height: 900px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
+.fp-pin { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); border: 2px solid var(--surface); box-shadow: 0 1px 4px rgb(0 0 0 / .35); display: grid; place-items: center; font: 700 12px/1 var(--body); }
+.fp-pin.hot { background: var(--ink); color: var(--surface); transform: scale(1.2); }
+@media (max-width: 900px) {
+  .fp-layout { grid-template-columns: 1fr; }
+  .fp-map-col { position: static; order: -1; }
+  #find-map { height: 300px; min-height: 0; }
+}
+@media (max-width: 520px) {
+  .fp-row { grid-template-columns: 28px minmax(0, 1fr); }
+  .fp-side { grid-column: 2; justify-items: start; text-align: left; }
+  .fp-schools { grid-template-columns: 1fr; }
+}
+/* Phones: brand and links on the first row, search full width underneath. */
+@media (max-width: 700px) {
+  .top-inner { gap: 8px 14px; }
+  .search { order: 2; flex-basis: 100%; max-width: none; margin-left: 0; }
+  #find-link { margin-left: auto; }
+}
