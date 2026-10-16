@@ -10,6 +10,7 @@
   "scripts": {
     "setup": "node scripts/build-schools.mjs && node scripts/build-flood.mjs",
     "setup:flood": "node scripts/build-flood.mjs",
+    "setup:stations": "node scripts/build-stations.mjs",
     "start": "node server.mjs",
     "test": "node --test test/*.test.mjs",
     "check": "node scripts/check-keys.mjs"
