@@ -10,7 +10,7 @@
   "scripts": {
     "setup": "node scripts/build-schools.mjs",
     "start": "node server.mjs",
-    "test": "node --test test/doorstep.test.mjs",
+    "test": "node --test test/*.test.mjs",
     "check": "node scripts/check-keys.mjs"
   }
 }
