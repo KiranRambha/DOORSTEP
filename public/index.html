@@ -36,6 +36,7 @@
         <li>Stations and journeys: TfL Journey Planner (covers National Rail)</li>
         <li>Prices: HM Land Registry Price Paid Data</li>
         <li>Crime: data.police.uk</li>
+        <li>Flood risk: Environment Agency (England)</li>
       </ul>
     </section>
 
@@ -150,6 +151,21 @@
             </header>
             <div class="panel-body" id="crime-body"></div>
           </section>
+
+          <section class="panel" id="p-flood">
+            <header class="panel-head">
+              <h2>Flood risk</h2>
+              <div class="controls">
+                <label class="mini check"><input type="checkbox" id="flood-on-map"> Show flood risk on map</label>
+                <div class="seg" id="flood-layer" role="group" aria-label="Which flood map" hidden>
+                  <button type="button" data-v="rivers" aria-pressed="true">Rivers and sea</button>
+                  <button type="button" data-v="surface" aria-pressed="false">Surface water</button>
+                </div>
+              </div>
+              <p class="sub" id="flood-sub">Homes at risk of flooding from rivers and the sea, within about 1 km</p>
+            </header>
+            <div class="panel-body" id="flood-body"></div>
+          </section>
         </div>
 
         <aside class="col-map">
@@ -164,6 +180,12 @@
             <li><i class="dot none"></i>No current grade</li>
             <li><i class="dot halo"></i>Likely catchment</li>
             <li class="crime-key" hidden><i class="dot crime"></i>Crime reports (bigger = more)</li>
+            <li class="flood-key" hidden><strong id="flood-key-name">Flood risk</strong></li>
+            <li class="flood-key" hidden><i class="sw fl-high"></i>High</li>
+            <li class="flood-key" hidden><i class="sw fl-medium"></i>Medium</li>
+            <li class="flood-key" hidden><i class="sw fl-low"></i>Low</li>
+            <li class="flood-key flood-key-vlow" hidden><i class="sw fl-vlow"></i>Very low</li>
+            <li class="flood-zoom" hidden>Zoom in to see flood areas</li>
           </ul>
         </aside>
       </div>
@@ -171,7 +193,7 @@
   </main>
 
   <footer class="wrap foot">
-    Contains HM Land Registry data © Crown copyright and database right. Contains public sector information from Ofsted, data.police.uk and Transport for London, licensed under the Open Government Licence v3.0. Postcode data from postcodes.io (ONS / OS). Map © OpenStreetMap contributors. Prices are for general research only.
+    Contains HM Land Registry data © Crown copyright and database right. Contains public sector information from Ofsted, data.police.uk and Transport for London, licensed under the Open Government Licence v3.0. Contains Environment Agency data licensed under the Open Government Licence v3.0. Postcode data from postcodes.io (ONS / OS). Map © OpenStreetMap contributors. Prices are for general research only.
   </footer>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>

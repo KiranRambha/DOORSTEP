@@ -16,6 +16,8 @@ const state = {
   transport: null,
   prices: null,
   crime: null,
+  flood: null,
+  floodLayer: 'rivers',
   schoolPhase: 'all',
   priceType: 'all',
   showAllSales: false,
@@ -34,7 +36,8 @@ const errorBox = (e) => `<p class="error">${esc(e.message || e)}</p>`;
 
 /* ───────────── Map ───────────── */
 
-let map, layer, crimeLayer;
+let map, layer, crimeLayer, floodLayers;
+const FLOOD_MIN_ZOOM = 14;
 function initMap() {
   if (map || !window.L) return;
   map = L.map('map', { scrollWheelZoom: false });
@@ -42,8 +45,17 @@ function initMap() {
     maxZoom: 19,
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
+  // Environment Agency flood maps (England). Both use the same blues, so only one is shown at a time.
+  const EA = 'https://environment.data.gov.uk/spatialdata';
+  // The EA only draws these at about 1:50,000 or closer, which is zoom 14 and up.
+  const wms = (svc, layers) => L.tileLayer.wms(`${EA}/${svc}/wms`, { layers, format: 'image/png', transparent: true, opacity: 0.65, version: '1.3.0', minZoom: FLOOD_MIN_ZOOM, attribution: 'Flood risk © Environment Agency' });
+  floodLayers = {
+    rivers: wms('nafra2-risk-of-flooding-from-rivers-and-sea', 'rofrs_4band'),
+    surface: wms('nafra2-risk-of-flooding-from-surface-water', 'rofsw'),
+  };
   crimeLayer = L.layerGroup().addTo(map);
   layer = L.layerGroup().addTo(map);
+  map.on('zoomend', floodZoomHint);
 }
 
 const toneColour = (tone) => getComputedStyle(document.documentElement).getPropertyValue(`--${tone || 'none'}`).trim();
@@ -99,6 +111,10 @@ function drawGlance() {
   const c = state.crime;
   if (c && !c.error && c.monthsCounted) {
     items.push(['Crimes per month', Math.round(c.total / c.monthsCounted).toLocaleString('en-GB'), 'within about a mile']);
+  }
+  const f = state.flood;
+  if (f?.ready) {
+    items.push(['Flood risk', f.covered ? esc(f.label) : '–', f.covered ? `${f.medHigh.toLocaleString('en-GB')} homes at medium/high risk nearby` : 'no data for Wales']);
   }
   const sc = state.schools;
   if (sc?.ready) {
@@ -762,6 +778,62 @@ function drawCrimeMap() {
   }
 }
 
+/* ───────────── Flood risk ───────────── */
+
+const FLOOD_BANDS = [
+  ['high', 'High', 'more than a 3.3% chance a year'],
+  ['medium', 'Medium', '1% to 3.3% a year'],
+  ['low', 'Low', '0.1% to 1% a year'],
+  ['veryLow', 'Very low', 'less than 0.1% a year'],
+];
+
+function drawFlood() {
+  const body = $('#flood-body');
+  const f = state.flood;
+  if (!f) return (body.innerHTML = loading('Checking Environment Agency flood data…'));
+  if (f.error) return (body.innerHTML = errorBox(f.error));
+  if (!f.ready) return (body.innerHTML = `<p class="note">${esc(f.message)}</p>`);
+  $('#flood-sub').textContent = `Rivers and sea · Environment Agency data as at ${monthName(f.fileDate)} · an area estimate, not for a single house`;
+  if (!f.covered) {
+    return (body.innerHTML = '<p><span class="chip">No data</span></p><p class="note">The Environment Agency covers England only, so there are no flood figures for Wales. Natural Resources Wales publishes its own flood map.</p>');
+  }
+  const n = (x) => x.toLocaleString('en-GB');
+  const max = Math.max(...FLOOD_BANDS.map(([k]) => f.homes[k]), 1);
+  const bars = FLOOD_BANDS.map(([k, name, odds]) => `<div class="fl-row">
+      <span class="fl-name"><i class="sw fl-${k === 'veryLow' ? 'vlow' : k}"></i>${name}<small>${odds}</small></span>
+      <span class="fl-bar"><i style="width:${(f.homes[k] / max) * 100}%"></i></span>
+      <span class="num">${n(f.homes[k])}</span>
+    </div>`).join('');
+  body.innerHTML = `<div class="fl-head">
+      <span class="chip flood-${f.verdict}">${esc(f.label)}</span>
+      <p><strong class="num">${n(f.medHigh)}</strong> home${f.medHigh === 1 ? '' : 's'} at medium or high risk within about 1 km</p>
+    </div>
+    <div class="fl-bars" aria-label="Homes by flood risk band">${bars}</div>
+    <p class="note">${n(f.postcodesAtRisk)} of ${n(f.postcodesChecked)} nearby postcodes have homes in a flood risk area.${f.partial ? ' Welsh postcodes nearby aren\'t included.' : ''}
+      Surface water (heavy rain that can't drain away) isn't in these numbers. Turn on the map to see it.</p>`;
+}
+
+function drawFloodMap() {
+  if (!map || !floodLayers) return;
+  const on = $('#flood-on-map')?.checked;
+  $('#flood-layer').hidden = !on;
+  for (const [k, l] of Object.entries(floodLayers)) {
+    const want = on && k === state.floodLayer;
+    if (want && !map.hasLayer(l)) l.addTo(map);
+    if (!want && map.hasLayer(l)) map.removeLayer(l);
+  }
+  for (const li of document.querySelectorAll('.legend .flood-key')) li.toggleAttribute('hidden', !on);
+  // Surface water has no "very low" band.
+  if (on && state.floodLayer === 'surface') $('.legend .flood-key-vlow').hidden = true;
+  $('#flood-key-name').textContent = state.floodLayer === 'surface' ? 'Surface water' : 'Rivers and sea';
+  floodZoomHint();
+}
+
+function floodZoomHint() {
+  const hint = $('.legend .flood-zoom');
+  if (hint) hint.hidden = !$('#flood-on-map')?.checked || map.getZoom() >= FLOOD_MIN_ZOOM;
+}
+
 /* ───────────── Loading data ───────────── */
 
 function drawAll() {
@@ -770,8 +842,10 @@ function drawAll() {
   drawSchools();
   drawPrices();
   drawCrime();
+  drawFlood();
   drawMap();
   drawCrimeMap();
+  drawFloodMap();
 }
 
 async function loadSection(key, url) {
@@ -800,7 +874,7 @@ async function search(q) {
   try {
     const place = await api(`/api/lookup?q=${encodeURIComponent(q)}`);
     state.place = place;
-    Object.assign(state, { crimeCat: null, schools: null, transport: null, prices: null, crime: null, showAllSchools: false, showAllSales: false });
+    Object.assign(state, { crimeCat: null, schools: null, transport: null, prices: null, crime: null, flood: null, showAllSchools: false, showAllSales: false });
     $('#intro').hidden = true;
     $('#results').hidden = false;
     $('#place-name').textContent = place.label;
@@ -816,6 +890,7 @@ async function search(q) {
       loadTransport(),
       loadPrices(),
       loadSection('crime', `/api/crime?lat=${lat}&lng=${lng}`),
+      loadSection('flood', `/api/flood?lat=${lat}&lng=${lng}`),
     ]);
   } catch (e) {
     $('#intro').hidden = false;
@@ -878,6 +953,14 @@ async function boot() {
     store.set('doorstep.hideFaith', $('#school-hide-faith').checked ? '1' : '0');
     drawSchools(); drawMap();
   });
+  $('#flood-on-map').addEventListener('change', () => {
+    drawFloodMap();
+    if ($('#flood-on-map').checked && map && state.place && map.getZoom() < FLOOD_MIN_ZOOM) {
+      map.setView([state.place.lat, state.place.lng], FLOOD_MIN_ZOOM);
+      document.querySelector('.col-map')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  });
+  segmented('#flood-layer', (v) => { state.floodLayer = v; drawFloodMap(); });
   segmented('#price-type', (v) => { state.priceType = v; drawPrices(); });
   $('#price-radius').addEventListener('change', loadPrices);
   $('#price-years').addEventListener('change', loadPrices);

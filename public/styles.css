@@ -401,3 +401,27 @@ table.schools .chip { white-space: nowrap; }
 .hbars:has(.cat-btn.active) .cat-btn:not(.active) { opacity: .55; }
 .dot.crime { background: color-mix(in srgb, var(--crime) 35%, transparent); border: 1px solid var(--crime); width: 12px; height: 12px; }
 .cat-btn { font-size: 13px; }
+
+/* Flood risk. Swatch colours match the Environment Agency's map tiles, so they're the same in both themes. */
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, .15); flex: none; }
+.fl-high { background: #555b9d; }
+.fl-medium { background: #9a9fde; }
+.fl-low { background: #c3e0ff; }
+.fl-vlow { background: #c8f7ff; }
+.chip.flood-low { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.chip.flood-some { color: var(--mixed); border-color: currentColor; background: transparent; }
+.chip.flood-higher { color: var(--poor); border-color: currentColor; background: transparent; }
+.fl-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.fl-head p { margin: 0; }
+.fl-bars { display: grid; gap: 6px; margin-top: 14px; }
+.fl-row { display: grid; grid-template-columns: minmax(0, 15em) 1fr auto; gap: 10px; align-items: center; font-size: 13.5px; }
+.fl-name { display: grid; grid-template-columns: auto 1fr; column-gap: 6px; align-items: center; min-width: 0; }
+.fl-name small { grid-column: 2; color: var(--muted); font-size: 12px; line-height: 1.3; }
+.legend .flood-zoom { font-style: italic; }
+.fl-bar { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.fl-bar i { display: block; height: 100%; background: var(--station); border-radius: 4px; }
+.fl-row .num { min-width: 3.5em; text-align: right; }
+@media (max-width: 520px) {
+  .fl-row { grid-template-columns: 1fr auto; }
+  .fl-bar { grid-column: 1 / -1; grid-row: 2; }
+}
