@@ -1,0 +1,16 @@
+{
+  "name": "doorstep",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Look up schools, stations, commute times, house prices and crime around any address in England and Wales, using free open data.",
+  "type": "module",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "setup": "node scripts/build-schools.mjs",
+    "start": "node server.mjs",
+    "test": "node --test test/doorstep.test.mjs",
+    "check": "node scripts/check-keys.mjs"
+  }
+}

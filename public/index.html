@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Doorstep</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-inner">
+      <a class="brand" href="/" aria-label="Doorstep home">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+        Doorstep
+      </a>
+      <form id="search" class="search" autocomplete="off">
+        <label for="q" class="sr">Postcode or place</label>
+        <input id="q" name="q" placeholder="Postcode or town, e.g. SG5 1NZ or Hitchin" required>
+        <label for="dest" class="sr">Commute to</label>
+        <select id="dest" name="dest" title="Where you commute to"></select>
+        <button type="submit">Look up</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="wrap layout">
+    <section id="intro" class="intro">
+      <h1>What's it like to live here?</h1>
+      <p>Enter a postcode or town in England or Wales. Doorstep pulls together nearby school ratings, the closest stations and the commute into London, recent sale prices for detached and semi-detached houses, and local crime. Everything comes from free government open data.</p>
+      <ul class="sources">
+        <li>Schools: Ofsted inspection results</li>
+        <li>Stations and journeys: TfL Journey Planner (covers National Rail)</li>
+        <li>Prices: HM Land Registry Price Paid Data</li>
+        <li>Crime: data.police.uk</li>
+      </ul>
+    </section>
+
+    <div id="results" class="results" hidden>
+      <div class="place">
+        <div>
+          <p class="eyebrow" id="place-area"></p>
+          <h1 id="place-name"></h1>
+        </div>
+      </div>
+
+      <dl class="glance" id="glance"></dl>
+
+      <div class="cols">
+        <div class="col-main">
+          <section class="panel" id="p-transport">
+            <header class="panel-head">
+              <h2>Stations &amp; commute</h2>
+              <p class="sub" id="transport-sub"></p>
+            </header>
+            <div class="panel-body" id="transport-body"></div>
+          </section>
+
+          <section class="panel" id="p-schools">
+            <header class="panel-head">
+              <h2>Schools nearby</h2>
+              <div class="controls">
+                <div class="seg" role="group" aria-label="School phase" id="school-phase">
+                  <button type="button" data-v="all" aria-pressed="true">All</button>
+                  <button type="button" data-v="Primary">Primary</button>
+                  <button type="button" data-v="Secondary">Secondary</button>
+                  <button type="button" data-v="other">Other</button>
+                </div>
+                <label class="mini">Within
+                  <select id="school-radius">
+                    <option value="1000">1 km</option>
+                    <option value="2000" selected>2 km</option>
+                    <option value="3000">3 km</option>
+                    <option value="5000">5 km</option>
+                  </select>
+                </label>
+                <label class="mini">Sort
+                  <select id="school-sort">
+                    <option value="distance">Nearest</option>
+                    <option value="rating">Best rated</option>
+                    <option value="chance">Best chance of a place</option>
+                  </select>
+                </label>
+                <label class="mini">Your faith
+                  <select id="school-faith" title="Used to estimate your chances at faith schools. Saved on this computer only.">
+                    <option value="">Not set</option>
+                    <option value="none">No faith</option>
+                    <option value="coe">Church of England</option>
+                    <option value="catholic">Catholic</option>
+                    <option value="christian">Other Christian</option>
+                    <option value="jewish">Jewish</option>
+                    <option value="muslim">Muslim</option>
+                    <option value="hindu">Hindu</option>
+                    <option value="sikh">Sikh</option>
+                  </select>
+                </label>
+                <label class="mini check"><input type="checkbox" id="school-hide-faith"> Hide faith schools</label>
+              </div>
+              <p class="sub" id="schools-sub"></p>
+            </header>
+            <div class="panel-body" id="schools-body"></div>
+          </section>
+
+          <section class="panel" id="p-prices">
+            <header class="panel-head">
+              <h2>House prices</h2>
+              <div class="controls">
+                <div class="seg" role="group" aria-label="Property type" id="price-type">
+                  <button type="button" data-v="all" aria-pressed="true">Both</button>
+                  <button type="button" data-v="Detached">Detached</button>
+                  <button type="button" data-v="Semi-detached">Semi</button>
+                </div>
+                <label class="mini">Within
+                  <select id="price-radius">
+                    <option value="500">500 m</option>
+                    <option value="1000" selected>1 km</option>
+                    <option value="1500">1.5 km</option>
+                  </select>
+                </label>
+                <label class="mini">Since
+                  <select id="price-years">
+                    <option value="1">1 year</option>
+                    <option value="3" selected>3 years</option>
+                    <option value="5">5 years</option>
+                  </select>
+                </label>
+                <label class="mini" id="size-wrap" hidden>Size
+                  <select id="price-size">
+                    <option value="0">Any size</option>
+                    <option value="5" selected>Likely 4+ beds (5+ rooms)</option>
+                    <option value="6">6+ habitable rooms</option>
+                  </select>
+                </label>
+              </div>
+              <p class="sub" id="prices-sub"></p>
+            </header>
+            <div class="panel-body" id="prices-body"></div>
+          </section>
+
+          <section class="panel" id="p-crime">
+            <header class="panel-head">
+              <h2>Crime</h2>
+              <div class="controls">
+                <label class="mini check"><input type="checkbox" id="crime-on-map"> Show crime on map</label>
+              </div>
+              <p class="sub" id="crime-sub">Street-level reports within about a mile, last 12 months published</p>
+            </header>
+            <div class="panel-body" id="crime-body"></div>
+          </section>
+        </div>
+
+        <aside class="col-map">
+          <div id="map" role="img" aria-label="Map of the area with schools and stations"></div>
+          <ul class="legend">
+            <li><i class="dot you"></i>Your search</li>
+            <li><i class="dot station"></i>Station</li>
+            <li><i class="dot great"></i>Top-rated school</li>
+            <li><i class="dot good"></i>Good</li>
+            <li><i class="dot mixed"></i>Mixed / needs work</li>
+            <li><i class="dot poor"></i>Inadequate</li>
+            <li><i class="dot none"></i>No current grade</li>
+            <li><i class="dot halo"></i>Likely catchment</li>
+            <li class="crime-key" hidden><i class="dot crime"></i>Crime reports (bigger = more)</li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="wrap foot">
+    Contains HM Land Registry data © Crown copyright and database right. Contains public sector information from Ofsted, data.police.uk and Transport for London, licensed under the Open Government Licence v3.0. Postcode data from postcodes.io (ONS / OS). Map © OpenStreetMap contributors. Prices are for general research only.
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="app.js" type="module"></script>
+</body>
+</html>
