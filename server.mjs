@@ -5,6 +5,7 @@ import { ROOT, loadEnv } from './lib/util.mjs';
 import { lookupLocation, nearbySchools, transport, crime, prices, DESTINATIONS } from './lib/sources.mjs';
 import { saveOverride } from './lib/catchment.mjs';
 import { flood } from './lib/flood.mjs';
+import { loadShortlist, saveEntry, removeEntry } from './lib/shortlist.mjs';
 
 loadEnv();
 const PORT = Number(process.env.PORT) || 5173;
@@ -57,11 +58,11 @@ const routes = {
   }),
 };
 
-async function readBody(req) {
+async function readBody(req, maxBytes = 10000) {
   let raw = '';
   for await (const chunk of req) {
     raw += chunk;
-    if (raw.length > 10000) throw Object.assign(new Error('Request too large.'), { status: 413 });
+    if (raw.length > maxBytes) throw Object.assign(new Error('Request too large.'), { status: 413 });
   }
   try { return JSON.parse(raw || '{}'); } catch { throw Object.assign(new Error('Body must be JSON.'), { status: 400 }); }
 }
@@ -77,6 +78,19 @@ const server = http.createServer(async (req, res) => {
       const m = metres === null || metres === '' ? null : Number(metres);
       if (m !== null && !(m > 0 && m < 50000)) throw Object.assign(new Error('Enter a distance between 1 metre and 50 km.'), { status: 400 });
       send(res, 200, { saved: saveOverride(String(urn), m, note) });
+    } catch (e) {
+      send(res, e.status || 500, { error: e.message });
+    }
+    return;
+  }
+
+  // The saved shortlist (only reachable from this computer: the server binds to 127.0.0.1).
+  if (url.pathname === '/api/shortlist') {
+    try {
+      if (req.method === 'GET') send(res, 200, { entries: loadShortlist() });
+      else if (req.method === 'POST') send(res, 200, { saved: saveEntry(await readBody(req, 50000)) });
+      else if (req.method === 'DELETE') send(res, 200, { removed: removeEntry(String(url.searchParams.get('id') || '')) });
+      else send(res, 405, { error: 'Method not allowed.' });
     } catch (e) {
       send(res, e.status || 500, { error: e.message });
     }
