@@ -26,7 +26,7 @@ npm test        # node:test, fully offline, every API mocked
 
 - **No npm dependencies.** Plain Node 18+ (`fetch`, `node:test`) and vanilla JS in the browser. Leaflet 1.9.4 loads from cdnjs. Don't add packages without a good reason.
 - Optional `.env`: `EPC_TOKEN` (enables the room-count / likely-4-bed filter), `TFL_APP_KEY`, `PORT`.
-- API responses are cached in `data/cache/`. Cache keys are versioned (`transport:v2`, `crime:v2`, `prices:v1`, `flood:v1`). **Bump the version when you change the shape of cached data**, or old entries will break the page.
+- API responses are cached in `data/cache/`. Cache keys are versioned (`transport:v2`, `crime:v2`, `prices:v1`, `flood:v2`). **Bump the version when you change the shape of cached data**, or old entries will break the page.
 - `data/` is git-ignored: `schools.json`, `flood.json`, `cache/`, plus two files of the owner's own data that must **never be deleted or blanked**: `catchment.json` (saved cut-off distances) and `shortlist.json` (saved places). `lib/shortlist.mjs` refuses to write if `shortlist.json` won't parse.
 - Tests: `npm test` runs `test/*.test.mjs` (`doorstep`, `flood`, `shortlist`; zip helper in `test/helpers.mjs`).
 
