@@ -120,3 +120,34 @@ test('station setup: outside London only, fastest terminus, resume uses the cach
   await buildStations({ log: () => {} });
   assert.equal(tflCalls, 3); // Harpenden cached; Nowhere's empty result retried
 });
+
+/* ───────── /api/find: stations plus their best likely Good+ schools ───────── */
+
+const HARPENDEN = { id: '9100HRPNDN', name: 'Harpenden', lat: 51.81464, lng: -0.35148, postcode: 'AL5 4FQ', terminus: 'stpancras', trainMin: 27, changes: 0, changeAt: [] };
+const school = (urn, name, phase, dLat, tone, extra = {}) => ({ urn, name, phase, lat: HARPENDEN.lat + dLat, lng: HARPENDEN.lng, ages: phase === 'Primary' ? '4–11' : '11–18', rating: { tone, headline: tone }, ...extra });
+const FIND_SCHOOLS = { source: 'test', builtAt: '2026-10-01', schools: [
+  school('1', 'Mixed Primary', 'Primary', 0.00135, 'mixed'), // 150 m, but only "mixed"
+  school('2', 'Good Primary', 'Primary', 0.0027, 'good'), // 300 m
+  school('3', 'St Mary RC', 'Secondary', -0.0027, 'great', { religion: 'Roman Catholic' }), // 300 m
+] };
+const STATIONS_FILE = { source: 'test', builtAt: '2026-10-17T10:00:00Z', journeyDate: '20261020', failed: 0, stations: [HARPENDEN] };
+
+test('find: best likely Good+ school per phase from the station, faith respected', async () => {
+  const tmp = tempProject({ 'schools.json': FIND_SCHOOLS, 'stations.json': STATIONS_FILE });
+  const { findStations } = await import(path.join(tmp, 'lib', 'stations.mjs'));
+  let r = findStations(null);
+  assert.equal(r.ready, true);
+  assert.equal(r.journeyDate, '20261020');
+  assert.equal(r.stations[0].primary.name, 'Good Primary');
+  assert.equal(r.stations[0].secondary.name, 'St Mary RC');
+  r = findStations('none'); // a Catholic school the family doesn't share is "unlikely"
+  assert.equal(r.stations[0].secondary, null);
+});
+
+test('find: missing stations.json asks for setup', async () => {
+  const tmp = tempProject({ 'schools.json': FIND_SCHOOLS });
+  const { findStations } = await import(path.join(tmp, 'lib', 'stations.mjs'));
+  const r = findStations(null);
+  assert.equal(r.ready, false);
+  assert.match(r.message, /npm run setup:stations/);
+});

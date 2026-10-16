@@ -6,6 +6,7 @@ import { lookupLocation, nearbySchools, transport, crime, prices, DESTINATIONS }
 import { saveOverride } from './lib/catchment.mjs';
 import { flood } from './lib/flood.mjs';
 import { loadShortlist, saveEntry, removeEntry } from './lib/shortlist.mjs';
+import { findStations } from './lib/stations.mjs';
 
 loadEnv();
 const PORT = Number(process.env.PORT) || 5173;
@@ -51,6 +52,7 @@ const routes = {
     const { lat, lng } = point(p);
     return flood(lat, lng);
   },
+  '/api/find': async (p) => findStations(p.get('faith') || null),
   '/api/config': async () => ({
     destinations: Object.entries(DESTINATIONS).map(([key, d]) => ({ key, name: d.name })),
     epcEnabled: Boolean(process.env.EPC_TOKEN),
