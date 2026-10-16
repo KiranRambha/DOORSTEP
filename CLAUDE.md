@@ -53,7 +53,7 @@ npm test        # node:test, fully offline, every API mocked
 | Data | Source | Notes |
 | --- | --- | --- |
 | Postcodes and places | api.postcodes.io | Bulk POST for geocoding; `/terminated_postcodes` for retired ones |
-| Schools | Ofsted "State-funded schools inspections and outcomes: management information" | Found via the GOV.UK content API; take the latest "latest inspections" CSV. State-funded England only (no independent schools, no Wales/Estyn). |
+| Schools | Ofsted "State-funded schools inspections and outcomes: management information" | Found via the GOV.UK content API; take the latest "latest inspections" CSV. State-funded England only (no independent schools, no Wales/Estyn). Plus the "as at 31 August 2025" official statistics CSV for pre-2019 grades. |
 | Stations and journeys | api.tfl.gov.uk `StopPoint` and `Journey/JourneyResults` | The Journey Planner covers National Rail into London. Plans for **next Tuesday, arriving 09:00**. |
 | Prices | HM Land Registry SPARQL `landregistry.data.gov.uk/landregistry/query` | Query with `VALUES ?pc {…}` of postcodes gathered from postcodes.io around the point. STRSTARTS on postcode is too slow. Category B (non-market) sales are excluded. |
 | Room counts | EPC API `api.get-energy-performance-data.communities.gov.uk` | Bearer token via GOV.UK One Login. `habitable_room_count`, `total_floor_area`. Land Registry has **no bedroom count**. |
@@ -67,6 +67,7 @@ npm test        # node:test, fully offline, every API mocked
 - **Report card** (from Nov 2025): grades per area (Exceptional > Strong > Expected > Needs attention > Urgent improvement) plus safeguarding Met / Not met.
 - **Older graded inspection** (OEIF): overall 1–4. Inspections from Sept 2024 to Nov 2025 have "Not judged" overall, so the app uses the sub-grades.
 - **Short (ungraded) inspection**: "School remains Good" and similar. `refineRating()` turns these into colours. It runs at load time too, so an old `schools.json` doesn't need rebuilding.
+- **Full grades from before Sept 2019**: the monthly file only has graded inspections from Sept 2019, so ~7,000 schools (often long-exempt Outstanding ones) have only a short inspection, and since late 2024 those just say "Standards maintained". `npm run setup` also downloads Ofsted's official statistics snapshot **as at 31 August 2025** (the last before report cards) and `withEarlierGrade()` fills in the earlier full grade for schools with no newer grade. If that grade belonged to the school before it became an academy, the note says so. Needs `npm run setup` to be re-run; it isn't applied at load time.
 
 ### Catchment (`lib/catchment.mjs`)
 - There's no national catchment data. The estimate uses straight-line distance plus **rank among schools a child could also join**: same phase, same **entry age** (infant/primary 4, junior 7, middle 9, secondary 11, upper 13), excluding opposite-sex schools and grammar schools.

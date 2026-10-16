@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR, fetchJson, mapLimit, parseCsv, normalisePostcode } from '../lib/util.mjs';
-import { headerIndex, schoolFromRow } from '../lib/ofsted.mjs';
+import { headerIndex, schoolFromRow, earlierGradesFromCsv, withEarlierGrade } from '../lib/ofsted.mjs';
 
 const GOVUK_PAGE = 'https://www.gov.uk/api/content/government/statistical-data-sets/monthly-management-information-ofsteds-school-inspections-outcomes';
 
@@ -19,6 +19,29 @@ async function findLatestCsv() {
   if (!attachments.length) throw new Error('Could not find the "latest inspections" CSV on GOV.UK.');
   // Attachments are listed oldest first; take the last one.
   return attachments[attachments.length - 1];
+}
+
+// Official statistics snapshot with every school's last full grade, including those from before
+// September 2019, which the monthly file leaves out. It's the last one before report cards.
+const SNAPSHOT_PAGE = 'https://www.gov.uk/api/content/government/statistics/state-funded-schools-inspections-and-outcomes-as-at-31-august-2025';
+
+async function downloadCsvText(url) {
+  const res = await fetch(url, { headers: { 'User-Agent': 'Doorstep/0.1' } });
+  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+  // Ofsted files are usually UTF-8, occasionally Windows-1252.
+  const buf = Buffer.from(await res.arrayBuffer());
+  let text = new TextDecoder('utf-8').decode(buf);
+  if (text.includes('\uFFFD')) text = new TextDecoder('windows-1252').decode(buf);
+  return text.replace(/^\uFEFF/, '');
+}
+
+async function earlierGrades() {
+  const page = await fetchJson(SNAPSHOT_PAGE);
+  const att = (page.details?.attachments || []).find(
+    (a) => /^State-funded schools inspections and outcomes as at 31 August 2025$/i.test((a.title || '').trim()) && /\.csv$/i.test(a.url || ''),
+  );
+  if (!att) throw new Error('Could not find the 31 August 2025 snapshot CSV on GOV.UK.');
+  return earlierGradesFromCsv(parseCsv(await downloadCsvText(att.url)));
 }
 
 async function geocode(postcodes) {
@@ -58,19 +81,27 @@ async function main() {
   console.log(`  ${att.title}`);
 
   console.log('Downloading…');
-  const res = await fetch(att.url, { headers: { 'User-Agent': 'Doorstep/0.1' } });
-  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-  // Ofsted files are usually UTF-8, occasionally Windows-1252.
-  const buf = Buffer.from(await res.arrayBuffer());
-  let text = new TextDecoder('utf-8').decode(buf);
-  if (text.includes('�')) text = new TextDecoder('windows-1252').decode(buf);
-  text = text.replace(/^﻿/, '');
+  const text = await downloadCsvText(att.url);
 
   const rows = parseCsv(text);
   const idx = headerIndex(rows[0]);
   if (idx('URN') < 0 || idx('Postcode') < 0) throw new Error('The CSV columns have changed; URN or Postcode is missing.');
   const schools = rows.slice(1).map((r) => schoolFromRow(r, idx)).filter(Boolean);
   console.log(`  ${schools.length.toLocaleString()} schools`);
+
+  console.log('Adding full grades from before September 2019 (Ofsted statistics, 31 August 2025)…');
+  try {
+    const earlier = await earlierGrades();
+    let filled = 0;
+    for (const s of schools) {
+      const r = withEarlierGrade(s.rating, earlier.get(s.urn));
+      if (r !== s.rating) { s.rating = r; filled++; }
+    }
+    console.log(`  ${filled.toLocaleString()} schools now show their earlier grade`);
+  } catch (e) {
+    // Not fatal: those schools just keep the "check the reports" note.
+    console.log(`  Skipped (${e.message})`);
+  }
 
   console.log('Finding school locations from postcodes (postcodes.io)…');
   const pcs = [...new Set(schools.map((s) => normalisePostcode(s.postcode)).filter(Boolean))];

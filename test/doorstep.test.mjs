@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { parseCsv, normalisePostcode, median } from '../lib/util.mjs';
-import { headerIndex, schoolFromRow } from '../lib/ofsted.mjs';
+import { headerIndex, schoolFromRow, earlierGradesFromCsv, withEarlierGrade } from '../lib/ofsted.mjs';
 import { matchCertificate } from '../lib/epc.mjs';
 
 const OFSTED_HEADER = 'Web Link,URN,LAESTAB,School name,Ofsted phase,Type of education,School open date,Admissions policy,Sixth form,Designated religious character,Religious ethos,Faith grouping,Ofsted region,Region,Local authority,Parliamentary constituency,Postcode,Multi-academy trust UID,Multi-academy trust name,Academy sponsor UID,Academy sponsor name,The income deprivation affecting children index (IDACI) quintile,Total number of pupils,Statutory lowest age,Statutory highest age,Inspection number of latest full inspection,Inspection type,Inspection type grouping,Event type grouping,Inspection start date,Publication date,Does the latest full inspection relate to the URN of the current school?,URN at time of latest full inspection,LAESTAB at time of latest full inspection,School name at time of latest full inspection,School type at time of latest full inspection,Category of concern,Safeguarding standards,Inclusion,Curriculum and teaching,Achievement,Attendance and behaviour,Personal development and wellbeing,Early years (where applicable),Post-16 provision (where applicable),Leadership and governance,Inspection number of latest OEIF graded inspection,Inspection type of latest OEIF graded inspection,Inspection type grouping of latest OEIF graded inspection,Event type grouping of latest OEIF graded inspection,Inspection start date of latest OEIF graded inspection,Publication date of latest OEIF graded inspection,Does the latest OEIF graded inspection relate to the URN of the current school?,URN at time of latest OEIF graded inspection,LAESTAB at time of latest OEIF graded inspection,School name at time of latest OEIF graded inspection,School type at time of latest OEIF graded inspection,Latest OEIF category of concern,Latest OEIF overall effectiveness,Latest OEIF quality of education,Latest OEIF behaviour and attitudes,Latest OEIF personal development,Latest OEIF effectiveness of leadership and management,Latest OEIF  safeguarding is effective?,Latest OEIF early years provision (where applicable),Latest OEIF sixth form provision (where applicable),Latest ungraded inspection number,Date of latest ungraded inspection,Ungraded inspection publication date,Does the ungraded inspection relate to the URN of the current school?,URN at time of the ungraded inspection,LAESTAB at time of the ungraded inspection,School name at time of the ungraded inspection,School type at time of the ungraded inspection,Ungraded inspection overall outcome,Most recent category of concern'.split(',');
@@ -78,6 +78,65 @@ test('Ofsted: never inspected', () => {
   const s = schoolFromRow(makeRow({ URN: '100004', 'School name': 'New Free School', Postcode: 'SG4 0TJ' }), idx);
   assert.equal(s.rating.headline, 'Not yet inspected');
   assert.equal(s.rating.score, null);
+});
+
+// The 31 Aug 2025 official statistics snapshot keeps full grades from before Sept 2019.
+const SNAP_HEADER = ['URN', 'School name', 'Inspection start date', 'Does the latest graded inspection relate to the URN of the current school?', 'School name at time of latest graded inspection', 'Overall effectiveness', 'Safeguarding is effective?'];
+const snapshot = earlierGradesFromCsv([
+  SNAP_HEADER,
+  ['101543', 'St Robert Southwell Catholic Primary School', '04/06/2019', 'Yes', 'St Robert Southwell RC Primary School', '1', 'Yes'],
+  ['140001', 'Oak Academy', '12/03/2013', 'No', 'Oak Primary School', '2', 'Yes'],
+  ['150001', 'New School', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL'],
+  ['140002', 'Archbishop Wake CE Primary', '12/03/2013', 'No', 'Archbishop Wake CE Primary', '2', '9'],
+]);
+
+test('Ofsted: "Standards maintained" gets the earlier full grade from the 2025 snapshot', () => {
+  const idx = headerIndex(OFSTED_HEADER);
+  const s = schoolFromRow(makeRow({
+    URN: '101543', 'School name': 'St Robert Southwell Catholic Primary School', 'Ofsted phase': 'Primary',
+    'Date of latest ungraded inspection': '04/12/2024', 'Ungraded inspection overall outcome': 'Standards maintained',
+  }), idx);
+  assert.equal(s.rating.tone, 'none', 'the monthly file alone has no grade');
+  const r = withEarlierGrade(s.rating, snapshot.get('101543'));
+  assert.equal(r.headline, 'Outstanding');
+  assert.equal(r.tone, 'great');
+  assert.equal(r.score, 100);
+  assert.equal(r.date, '2019-06-04');
+  assert.equal(r.system, 'Graded inspection');
+  assert.match(r.note, /Short inspection 2024-12: Standards maintained/);
+  assert.doesNotMatch(r.note, /isn't in Ofsted's file/);
+});
+
+test('Ofsted: an earlier grade from before academy conversion says so', () => {
+  const idx = headerIndex(OFSTED_HEADER);
+  const s = schoolFromRow(makeRow({
+    URN: '140001', 'School name': 'Oak Academy', 'Ofsted phase': 'Primary',
+    'Date of latest ungraded inspection': '10/10/2023', 'Ungraded inspection overall outcome': 'School remains Good (Concerns) - S5 Next',
+  }), idx);
+  const r = withEarlierGrade(s.rating, snapshot.get('140001'));
+  assert.equal(r.headline, 'Good');
+  assert.equal(r.tone, 'good');
+  assert.match(r.note, /given to Oak Primary School, the school before/);
+  assert.match(r.note, /concerns/i);
+});
+
+test('Ofsted: an academy that kept its name, and an unrecorded safeguarding code', () => {
+  const r = withEarlierGrade({ system: 'Short inspection', headline: 'School remains Good', tone: 'good', score: 70, date: '2023-01-10', areas: [], safeguarding: null, note: null }, snapshot.get('140002'));
+  assert.match(r.note, /from before the school became an academy or changed its legal status/);
+  assert.doesNotMatch(r.note, /given to/);
+  assert.equal(r.safeguarding, null, '9 means not recorded');
+  assert.equal(snapshot.get('101543').safeguarding, 'Yes');
+});
+
+test('Ofsted: the snapshot never overrides a newer grade, and schools it lacks are unchanged', () => {
+  const idx = headerIndex(OFSTED_HEADER);
+  const graded = schoolFromRow(makeRow({
+    URN: '101543', 'Latest OEIF overall effectiveness': '2', 'Inspection start date of latest OEIF graded inspection': '01/02/2023',
+  }), idx);
+  assert.equal(withEarlierGrade(graded.rating, snapshot.get('101543')).headline, 'Good');
+  assert.equal(snapshot.has('150001'), false, 'no grade in the snapshot either');
+  const lone = schoolFromRow(makeRow({ URN: '150001', 'Ungraded inspection overall outcome': 'Standards maintained' }), idx);
+  assert.deepEqual(withEarlierGrade(lone.rating, undefined), lone.rating);
 });
 
 test('EPC matching picks the right house and latest certificate', () => {
