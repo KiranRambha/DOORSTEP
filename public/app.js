@@ -1052,7 +1052,7 @@ function slCell(e, col, best) {
       const faith = `<small>${esc(faithLabel(e.settings))}</small>`;
       if (!p) return td(`<span class="main">None</span><small>within ${dist(Number(sc.radius))}</small>${faith}${from(sc)}`);
       const [head] = splitLabel(p.label);
-      return td(`<span class="main">${esc(p.name)}</span><small>${dist(Number(p.distance))} away</small><span class="chip ${esc(p.estimate)}">${esc(head)}</span>${p.likely ? '' : '<small>no likely Outstanding school</small>'}${faith}${from(sc)}`);
+      return td(`<span class="main">${esc(p.name)}</span><small>${dist(Number(p.distance))} away</small><span class="chip ${esc(p.estimate)}">${esc(head)}</span>${p.likely ? '' : '<small>none nearby you\'d likely get into</small>'}${faith}${from(sc)}`);
     }
     case 'detached':
     case 'semi': {
