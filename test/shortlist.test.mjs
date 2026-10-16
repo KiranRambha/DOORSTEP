@@ -174,3 +174,30 @@ test('best in each column: ties all shade, single values and unlikely schools ne
   assert.deepEqual(best.primary, ['b']);
   assert.deepEqual(best.crime, [], 'only one row has a value');
 });
+
+test('faith label for the school cells', () => {
+  assert.equal(snap.faithLabel({ faith: 'none' }), 'faith: no faith');
+  assert.equal(snap.faithLabel({ faith: 'catholic', hideFaith: true }), 'faith: Catholic · faith schools hidden');
+  assert.equal(snap.faithLabel({}), 'faith: not set');
+  assert.equal(snap.faithLabel({ faith: '' }), 'faith: not set');
+});
+
+test('rows saved with different faith settings are flagged', () => {
+  const e = (faith, hideFaith = false) => ({ settings: { faith, hideFaith } });
+  assert.equal(snap.faithSettingsDiffer([e('none'), e('none')]), false);
+  assert.equal(snap.faithSettingsDiffer([e('none'), e('catholic')]), true);
+  assert.equal(snap.faithSettingsDiffer([e('none'), e('none', true)]), true);
+  assert.equal(snap.faithSettingsDiffer([e(''), { settings: {} }]), false, 'missing means not set');
+  assert.equal(snap.faithSettingsDiffer([e('none')]), false);
+});
+
+test('refreshing with new settings never keeps old settings-dependent values', () => {
+  const old = { schools: { asOf: '2026-10-12', primary: { name: 'Old pick' } }, prices: { asOf: '2026-10-12' }, transport: { asOf: '2026-10-12' }, crime: { perMonth: 9, asOf: '2026-10-12' }, flood: { medHigh: 3, asOf: '2026-10-12' } };
+  const fresh = { schools: null, prices: null, transport: null, crime: null, flood: null };
+  const m = snap.mergeSnapshot(old, fresh, { settingsChanged: true });
+  assert.equal(m.schools, null, 'a school pick made under the old faith setting would be wrong');
+  assert.equal(m.prices, null);
+  assert.equal(m.transport, null);
+  assert.equal(m.crime.perMonth, 9, 'crime and flood do not depend on settings');
+  assert.equal(m.flood.medHigh, 3);
+});

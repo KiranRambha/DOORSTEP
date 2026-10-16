@@ -1,4 +1,4 @@
-import { median, chance, goodChance, isFaithSchool, crimeTrendPct, shortlistId, buildSnapshot, mergeSnapshot, bestInColumn } from './snapshot.js';
+import { median, chance, goodChance, isFaithSchool, crimeTrendPct, shortlistId, buildSnapshot, mergeSnapshot, bestInColumn, faithLabel, faithSettingsDiffer } from './snapshot.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -959,14 +959,16 @@ function redrawShortlistBits() {
   if (!$('#shortlist').hidden) drawShortlist();
 }
 
-async function refreshEntry(entry) {
+/** Refresh a row with its own saved settings, or with `settings` (e.g. the page's current ones). */
+async function refreshEntry(entry, settings = entry.settings || {}) {
   state.slBusy.add(entry.id);
   drawShortlist();
+  const settingsChanged = JSON.stringify(settings) !== JSON.stringify(entry.settings || {});
   try {
-    const fresh = buildSnapshot(await fetchPlaceData(entry), entry.settings || {});
+    const fresh = buildSnapshot(await fetchPlaceData({ ...entry, settings }), settings);
     // Removed while the data was loading: don't bring it back.
     if (!state.shortlist.some((e) => e.id === entry.id)) return;
-    const { saved } = await apiSend('POST', '/api/shortlist?refresh=1', { ...entry, snapshot: mergeSnapshot(entry.snapshot, fresh) });
+    const { saved } = await apiSend('POST', '/api/shortlist?refresh=1', { ...entry, settings, snapshot: mergeSnapshot(entry.snapshot, fresh, { settingsChanged }) });
     const i = state.shortlist.findIndex((e) => e.id === entry.id);
     if (i >= 0) state.shortlist[i] = saved;
   } catch (e) {
@@ -977,14 +979,16 @@ async function refreshEntry(entry) {
   }
 }
 
-async function refreshAll() {
-  const b = $('#sl-refresh-all');
-  b.disabled = true;
+async function refreshAll(useCurrent = false) {
+  const buttons = [$('#sl-refresh-all'), $('#sl-refresh-current')];
+  for (const b of buttons) b.disabled = true;
+  const current = useCurrent ? currentSettings() : null;
   // One at a time, to stay kind to TfL.
   for (const e of [...state.shortlist]) {
-    if (state.shortlist.includes(e)) await refreshEntry(e);
+    const live = state.shortlist.find((x) => x.id === e.id);
+    if (live) await refreshEntry(live, current || live.settings || {});
   }
-  b.disabled = false;
+  for (const b of buttons) b.disabled = false;
 }
 
 const shortDay = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
@@ -1045,9 +1049,10 @@ function slCell(e, col, best) {
       const sc = sn.schools;
       if (!sc) return none;
       const p = sc[col];
-      if (!p) return td(`<span class="main">None</span><small>within ${dist(Number(sc.radius))}</small>${from(sc)}`);
+      const faith = `<small>${esc(faithLabel(e.settings))}</small>`;
+      if (!p) return td(`<span class="main">None</span><small>within ${dist(Number(sc.radius))}</small>${faith}${from(sc)}`);
       const [head] = splitLabel(p.label);
-      return td(`<span class="main">${esc(p.name)}</span><small>${dist(Number(p.distance))} away</small><span class="chip ${esc(p.estimate)}">${esc(head)}</span>${p.likely ? '' : '<small>no likely Outstanding school</small>'}${from(sc)}`);
+      return td(`<span class="main">${esc(p.name)}</span><small>${dist(Number(p.distance))} away</small><span class="chip ${esc(p.estimate)}">${esc(head)}</span>${p.likely ? '' : '<small>none nearby you\'d likely get into</small>'}${faith}${from(sc)}`);
     }
     case 'detached':
     case 'semi': {
@@ -1078,6 +1083,8 @@ function slCell(e, col, best) {
 function drawShortlist() {
   const body = $('#sl-body');
   $('#sl-refresh-all').hidden = !state.shortlist.length;
+  $('#sl-refresh-current').hidden = !state.shortlist.length;
+  $('#sl-refresh-current').title = `Refresh every row using the settings on the main page now (${faithLabel(currentSettings())}, commute to ${$('#dest').selectedOptions[0]?.text || 'your destination'})`;
   if (!state.shortlist.length) {
     body.innerHTML = '<div class="sl-wrap"><p class="empty">Nothing saved yet. Look up a place and press ☆ Save to shortlist.</p></div>';
     return;
@@ -1100,7 +1107,10 @@ function drawShortlist() {
         <button type="button" class="btn icon" data-act="remove" aria-label="Remove ${esc(e.label)}" title="Remove">✕</button></td>
     </tr>`;
   }).join('');
-  body.innerHTML = `<div class="sl-wrap"><table class="sl"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
+  const warn = faithSettingsDiffer(state.shortlist)
+    ? '<p class="sl-warn">These places were saved with different faith settings, so the school columns aren\'t like for like. Use <strong>Refresh with my settings</strong> to line them up.</p>'
+    : '';
+  body.innerHTML = `${warn}<div class="sl-wrap"><table class="sl"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function showView() {
@@ -1275,7 +1285,8 @@ async function boot() {
     history.pushState(null, '', '?view=shortlist');
     showView();
   });
-  $('#sl-refresh-all').addEventListener('click', refreshAll);
+  $('#sl-refresh-all').addEventListener('click', () => refreshAll(false));
+  $('#sl-refresh-current').addEventListener('click', () => refreshAll(true));
   $('#sl-body').addEventListener('click', (e) => {
     const sort = e.target.closest('[data-sort]')?.dataset.sort;
     if (sort) {

@@ -72,11 +72,28 @@ export function buildSnapshot({ transport, schools, prices, crime, flood }, sett
   return out;
 }
 
-/** A refresh replaces each section that came back, and keeps the old one where it failed. */
-export function mergeSnapshot(old = {}, fresh = {}) {
+/** A refresh replaces each section that came back, and keeps the old one where it failed.
+ *  With new settings, only crime and flood (which don't depend on settings) are kept. */
+export function mergeSnapshot(old = {}, fresh = {}, { settingsChanged = false } = {}) {
   const out = {};
-  for (const k of ['transport', 'schools', 'prices', 'crime', 'flood']) out[k] = fresh[k] ?? old[k] ?? null;
+  for (const k of ['transport', 'schools', 'prices', 'crime', 'flood']) {
+    const keep = !settingsChanged || k === 'crime' || k === 'flood';
+    out[k] = fresh[k] ?? (keep ? old[k] : null) ?? null;
+  }
   return out;
+}
+
+const FAITH_NAMES = { none: 'no faith', coe: 'Church of England', catholic: 'Catholic', christian: 'other Christian', jewish: 'Jewish', muslim: 'Muslim', hindu: 'Hindu', sikh: 'Sikh' };
+
+/** "faith: Catholic · faith schools hidden": which faith setting a row's school picks used. */
+export function faithLabel(settings = {}) {
+  return `faith: ${FAITH_NAMES[settings.faith] || 'not set'}${settings.hideFaith ? ' · faith schools hidden' : ''}`;
+}
+
+/** True when saved rows used different faith settings, so their school columns aren't like for like. */
+export function faithSettingsDiffer(entries) {
+  const keys = new Set(entries.map((e) => `${e.settings?.faith || ''}|${Boolean(e.settings?.hideFaith)}`));
+  return keys.size > 1;
 }
 
 // For each column: how to read a row's value (lower is better; null means no value).

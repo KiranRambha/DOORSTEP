@@ -96,6 +96,7 @@ npm test        # node:test, fully offline, every API mocked
 - A row is a **snapshot** built in the browser from the data already loaded (`buildSnapshot`), with the page settings saved alongside (destination, faith, hide-faith, school radius, price radius/years/size). **Refresh** re-fetches with the entry's own settings; `mergeSnapshot` keeps the old value for any section that failed, and the cell says "from <date>".
 - Ids: a normalised postcode, or the lower-cased place name, so "sg51nz" and "SG5 1NZ" are one entry.
 - School columns (the owner chose this): the nearest **Outstanding** (`rating.tone === 'great'`) school in that phase that you'd **likely** get into; if none, the nearest Outstanding one with its chance shown. Fallback schools never get the green "best" shading.
+- Faith: each row keeps the faith setting it was saved with, shown in the school cells ("faith: Catholic"). If rows differ, the shortlist warns that the school columns aren't like for like. **Refresh with my settings** re-runs every row with the main page's current settings; in that case old school, price and commute values are never kept on failure (they'd belong to the old settings), only crime and flood are.
 - Walk time is straight-line distance at 80 m/min, rounded up.
 - Remove has a 6-second undo (no `confirm()`); the DELETE is sent when the undo expires.
 
