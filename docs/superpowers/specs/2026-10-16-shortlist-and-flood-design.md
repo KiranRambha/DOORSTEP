@@ -100,7 +100,7 @@ Success: open one page and see every saved place side by side on those things, w
 | Crime | Crimes per month within about a mile, trend arrow (↑ ↓ →) with % | Lowest per month |
 | Flood | Homes at medium or high risk within 1 km, plus the verdict pill | Fewest |
 
-- The owner chose "nearest you'd likely get into" over "nearest regardless of chance" (16 Oct 2026).
+- School column rule: "nearest you'd likely get into" rather than "nearest regardless of chance" (my recommendation, 16 Oct 2026; awaiting the owner's OK).
 - "Outstanding" means `rating.tone === 'great'`, which already covers Outstanding, "School remains Outstanding" and top report-card grades. Search within the school radius the main page uses (3 km default). If none, show "None within 3 km".
 - The chance pill uses the existing catchment wording (`chance()`, `chipHtml`) and must not wrap.
 - Prices use the main page's price settings at the time of saving. Show them in a small grey line or tooltip so a 1 km/3 yr row isn't silently compared with a 1.5 km/5 yr row.
