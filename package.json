@@ -8,7 +8,8 @@
     "node": ">=18.17"
   },
   "scripts": {
-    "setup": "node scripts/build-schools.mjs",
+    "setup": "node scripts/build-schools.mjs && node scripts/build-flood.mjs",
+    "setup:flood": "node scripts/build-flood.mjs",
     "start": "node server.mjs",
     "test": "node --test test/*.test.mjs",
     "check": "node scripts/check-keys.mjs"
