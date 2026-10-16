@@ -12,6 +12,7 @@ A personal, local web app for house-hunting in England and Wales. You type a pos
 - **Crime**: the doorstep compared with the wider area, the trend, a type filter and map dots
 - **Flood risk**: homes at risk from rivers and the sea within about 1 km, plus EA flood map layers (England only)
 - **Shortlist**: saved snapshots of places compared side by side
+- **Find places**: a reverse search. Stations outside London that fit a door-to-door time into a central terminus, a likely Good+ primary and secondary, and a 4-bed budget
 
 It was built as a free alternative to liveable.co.uk using only free government open data. It runs on the owner's Mac at `~/Developer/doorstep`.
 
@@ -20,15 +21,16 @@ It was built as a free alternative to liveable.co.uk using only free government 
 ```bash
 npm run setup   # Ofsted results -> data/schools.json, then EA flood postcodes -> data/flood.json. Re-run monthly.
 npm run setup:flood   # just the flood file (EA updates it quarterly)
+npm run setup:stations   # Find places: NaPTAN stations + TfL trip per station -> data/stations.json (10-40 min, resumes via cache). Re-run every few months, then restart.
 npm start       # http://localhost:5173  (binds to 127.0.0.1 only)
 npm test        # node:test, fully offline, every API mocked
 ```
 
 - **No npm dependencies.** Plain Node 18+ (`fetch`, `node:test`) and vanilla JS in the browser. Leaflet 1.9.4 loads from cdnjs. Don't add packages without a good reason.
 - Optional `.env`: `EPC_TOKEN` (enables the room-count / likely-4-bed filter), `TFL_APP_KEY`, `PORT`.
-- API responses are cached in `data/cache/`. Cache keys are versioned (`transport:v2`, `crime:v2`, `prices:v1`, `flood:v2`). **Bump the version when you change the shape of cached data**, or old entries will break the page.
-- `data/` is git-ignored: `schools.json`, `flood.json`, `cache/`, plus two files of the owner's own data that must **never be deleted or blanked**: `catchment.json` (saved cut-off distances) and `shortlist.json` (saved places). `lib/shortlist.mjs` refuses to write if `shortlist.json` won't parse.
-- Tests: `npm test` runs `test/*.test.mjs` (`doorstep`, `flood`, `shortlist`; zip helper in `test/helpers.mjs`).
+- API responses are cached in `data/cache/`. Cache keys are versioned (`transport:v2`, `crime:v2`, `prices:v1`, `flood:v2`, `stjourney:v1`, `findprice:v1`). **Bump the version when you change the shape of cached data**, or old entries will break the page.
+- `data/` is git-ignored: `schools.json`, `flood.json`, `stations.json`, `cache/`, plus two files of the owner's own data that must **never be deleted or blanked**: `catchment.json` (saved cut-off distances) and `shortlist.json` (saved places). `lib/shortlist.mjs` refuses to write if `shortlist.json` won't parse.
+- Tests: `npm test` runs `test/*.test.mjs` (`doorstep`, `flood`, `shortlist`, `find`; zip helper in `test/helpers.mjs`).
 
 ## Layout
 
@@ -38,12 +40,16 @@ npm test        # node:test, fully offline, every API mocked
 | `lib/sources.mjs` | Postcode/place lookup, schools near a point, TfL stations and journeys, police crime, Land Registry prices, `postcodesAround()` (shared by prices and flood) |
 | `lib/flood.mjs` | Parses the EA flood CSV, sums homes at risk around a point, picks the verdict |
 | `lib/shortlist.mjs` | Reads and writes `data/shortlist.json` (atomic write, never over a damaged file) |
+| `lib/stations.mjs` | Find places: `buildStations()` (setup), `findStations(faith)` for `/api/find`, `stationPrice(id, budget)` for `/api/find/price` |
 | `lib/unzip.mjs` | Minimal zip reader for the EA download (no dependencies) |
 | `lib/catchment.mjs` | Catchment estimate, saved cut-offs, faith rules |
 | `lib/ofsted.mjs` | Turns Ofsted's CSV row into a rating (handles 3 inspection systems) |
 | `lib/epc.mjs` | Optional EPC matching for habitable rooms and floor area |
 | `lib/util.mjs` | fetch with retry/timeout, disk cache, CSV parser, geo helpers |
 | `scripts/build-schools.mjs`, `scripts/build-flood.mjs` | `npm run setup` (and `setup:flood`) |
+| `scripts/build-stations.mjs` | `npm run setup:stations` |
+| `public/find.js` | Pure Find places rules shared by the page and tests: `walkAllowance`, `priceVerdict`, `rankStations` |
+| `public/find-view.js` | The Find places view (settings bar, price queue, list, map) |
 | `public/index.html`, `app.js`, `styles.css` | The whole front end (no framework) |
 | `public/snapshot.js` | Pure helpers shared by the page, the server and the tests: shortlist ids, snapshot building, refresh merge, best-in-column |
 | `test/*.test.mjs` | Unit plus mocked end-to-end tests |
@@ -59,6 +65,7 @@ npm test        # node:test, fully offline, every API mocked
 | Room counts | EPC API `api.get-energy-performance-data.communities.gov.uk` | Bearer token via GOV.UK One Login. `habitable_room_count`, `total_floor_area`. Land Registry has **no bedroom count**. |
 | Crime | data.police.uk `crimes-street/all-crime` | About a 1-mile radius, roughly 2 months behind. Locations are anonymised snap points. |
 | Flood risk | EA "Risk of Flooding from Rivers and Sea – Postcodes in Areas at Risk" (zip download) and WMS layers `nafra2-risk-of-flooding-from-rivers-and-sea` (`rofrs_4band`) / `nafra2-risk-of-flooding-from-surface-water` (`rofsw`) | England only. The CSV lists every postcode with ≥1 property at risk; rows like `TW9 4H*` are grouped **no-risk** postcodes and are skipped. WMS layers only draw at zoom 14+. |
+| Rail stations | NaPTAN `naptan.api.dft.gov.uk/v1/access-nodes?dataFormat=csv&atcoAreaCodes=910` | Area 910 is National Rail; keep `StopType` RLY and `Status` active. TfL's `StopPoint/Mode/national-rail` times out (504), so don't use it. Region (to drop Greater London) and nearest postcode come from postcodes.io bulk reverse (`POST /postcodes` with `geolocations`). |
 | Map | OpenStreetMap tiles plus Leaflet | |
 
 ## How the tricky parts work (decisions already made)
@@ -99,6 +106,16 @@ npm test        # node:test, fully offline, every API mocked
 - Faith: each row keeps the faith setting it was saved with, shown in the school cells ("faith: Catholic"). If rows differ, the shortlist warns that the school columns aren't like for like. **Refresh with my settings** re-runs every row with the main page's current settings; in that case old school, price and commute values are never kept on failure (they'd belong to the old settings), only crime and flood are.
 - Walk time is straight-line distance at 80 m/min, rounded up.
 - Remove has a 6-second undo (no `confirm()`); the DELETE is sent when the undo expires.
+
+### Find places (`lib/stations.mjs`, `public/find.js`, `public/find-view.js`)
+- Design: `docs/superpowers/specs/2026-10-17-find-places-design.md`. Candidates are **National Rail stations in England outside Greater London**, within 100 km of Charing Cross (the owner chose outside London only).
+- **Door to door** = walk + fastest train to **any** of the 16 central termini (`TERMINI` in `lib/sources.mjs`), ending on arrival at the terminus. Setup tries the 3 nearest termini per station and keeps trains up to 85 min (so the 90-min setting works).
+- **Walk allowance** = min(max walk, door-to-door − train). Under 5 min, the station is dropped (the owner agreed). 80 m/min straight-line.
+- **Schools** are judged from the station point: at least one primary and one secondary with tone `great`/`good` **and** `goodChance` (in/likely), using the faith setting.
+- **Price** = median of standard detached + semi sales, last 3 years, within the walk allowance, with EPC **5+ habitable rooms**. Fewer than 5 sales, a price error or an EPC outage is "couldn't check", **never a pass**. Without `EPC_TOKEN`, all sizes count and the row says so.
+- **Cheap check:** `/api/find/price` runs EPC only when `budget >= allSizesMedian` (all detached/semi). Otherwise the station is "over budget". If the budget is later raised past it, `priceVerdict` says `needs-epc` and the page asks again.
+- Changing door-to-door, walk or budget only re-filters in the browser; prices are fetched once per station (sales carry their distance). Concurrency 3, fastest train first. Flood is fetched for passing stations only. Crime isn't on rows (too many calls); it's in the normal view after click-through.
+- Clicking a row opens the station's nearest postcode with the commute dropdown set to that station's terminus.
 
 ## UI conventions and the owner's preferences
 

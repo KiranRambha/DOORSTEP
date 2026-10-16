@@ -8,6 +8,7 @@ A small local web app that answers "what's it like to live here?" for any postco
 - **Crime** reported within about a mile over the last 12 months
 - **Flood risk** from rivers and the sea for the area around the address, plus flood maps (England)
 - A **shortlist** to save places and compare them side by side
+- **Find places**: stations outside London within an hour door to door of a central terminus, with good schools you'd likely get into and 4-bed houses under your budget
 
 Everything comes from free, open government data. No accounts are needed for the basics.
 
@@ -22,6 +23,8 @@ npm start         # then open http://localhost:5173
 ```
 
 There are no packages to install. Re-run `npm run setup` once a month to pick up new inspections. `npm run setup:flood` refreshes just the flood data (the Environment Agency updates it every few months).
+
+For **Find places**, also run `npm run setup:stations` once (10 to 40 minutes, best with `TFL_APP_KEY` in `.env`). It plans every station's 9am weekday trip into London. Re-run it every few months; if it stops part-way, run it again and it carries on.
 
 ## Optional: filter for 4-bed houses
 
@@ -106,10 +109,12 @@ lib/catchment.mjs       catchment estimate and saved cut-off distances
 lib/ofsted.mjs          turns Ofsted's CSV into a rating per school
 lib/flood.mjs           flood risk summary from the EA postcode file
 lib/shortlist.mjs       saving and loading the shortlist
+lib/stations.mjs        Find places: station list setup, schools and prices per station
 lib/unzip.mjs           reads the EA zip download (no dependencies)
 scripts/build-schools.mjs   the schools part of "npm run setup"
 scripts/build-flood.mjs     the flood part ("npm run setup:flood")
-public/                 the web page (index.html, app.js, styles.css, snapshot.js)
+scripts/build-stations.mjs  "npm run setup:stations" for Find places
+public/                 the web page (index.html, app.js, styles.css, snapshot.js, find.js, find-view.js)
 data/                   downloaded data, your saved settings and a cache of API responses
 ```
 

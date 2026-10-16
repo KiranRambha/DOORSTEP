@@ -1,10 +1,6 @@
 # Doorstep roadmap
 
-Ideas agreed with the owner on 16 Oct 2026. Items 1 and 3 were built on 16 Oct 2026 (see "Already done"). Last updated 16 Oct 2026. **Suggested next: 2 (reverse search), which can reuse the shortlist's snapshot builder.** Ask the owner which to do next; don't assume.
-
-## Most useful for choosing a place
-
-2. **Find places for me (reverse search).** Set limits (e.g. "≤75 min to Bank, a good school likely, 4-bed detached under £800k") and rank candidate towns and suburbs. This is Liveable's core paid feature. It needs a candidate list (e.g. ONS built-up areas or postcode districts within a commuting band), batched TfL journeys (rate limits, so cache heavily or use a TFL_APP_KEY), and the existing school/price logic per candidate. It's the biggest job.
+Ideas agreed with the owner on 16 Oct 2026. Items 1 and 3 were built on 16 Oct 2026 and item 2 on 17 Oct 2026 (see "Already done"). Last updated 17 Oct 2026. **Suggested next: 4 (broadband), small and self-contained, or the small fixes below.** Ask the owner which to do next; don't assume.
 
 ## Extra checks for a specific area
 
@@ -30,6 +26,8 @@ Found while building and reviewing the shortlist and flood work. None block anyt
 - **Shortlist ids for place names** treat "St Albans" and "St. Albans" as different places (postcodes are fine).
 - **Zip reader** has no ZIP64 support (only matters if the EA file ever passes 4 GB; it's ~5 MB).
 - **Code comment** in `lib/flood.mjs` near `loadFlood` should say a new `flood.json` needs a server restart.
+- **Map zoom buttons over the header on phones.** On the main place view, scrolling on a narrow screen puts Leaflet's +/− buttons on top of the sticky header. The Find places map fixes this with `isolation: isolate` on `#find-map`; the same one line on `#map` should do it.
+- **Find places: near misses.** Over-budget stations are only counted, not listed. A "Didn't make it" list with reasons (e.g. "over budget by £60k") could help.
 
 ## Already done (for context)
 
@@ -38,4 +36,5 @@ Schools with Ofsted (3 inspection systems), catchment estimate plus saved cut-of
 - **1. Shortlist and compare** (Oct 2026): save a snapshot of a place, compare in one table with best-in-column shading, sort, refresh, undo on remove. Design: `docs/superpowers/specs/2026-10-16-shortlist-and-flood-design.md`.
 - **3. Flood risk** (Oct 2026): rivers-and-sea area summary from EA postcode data, plus rivers-and-sea and surface-water map layers. England only.
 - **Ofsted grades from before Sept 2019** (Oct 2026): setup also reads Ofsted's 31 Aug 2025 statistics snapshot, so ~7,000 schools that only had a short inspection ("Standards maintained") show their earlier full grade.
+- **2. Find places** (Oct 2026): stations outside London within a door-to-door time of any central terminus, with a likely Good+ primary and secondary and a typical 4-bed under a chosen budget. Ranked list plus map; click through to the full view. Needs `npm run setup:stations`. Design: `docs/superpowers/specs/2026-10-17-find-places-design.md`.
 - **Shortlist faith settings** (Oct 2026): each row shows the faith setting it used, a warning appears when rows differ, and "Refresh with my settings" lines them up. Pills stay readable on the green "best" shading.
