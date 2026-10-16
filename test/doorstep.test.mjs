@@ -123,6 +123,12 @@ test('API flows with mocked services', async () => {
         { name_1: 'Hitchin', local_type: 'Town', district_borough: 'North Hertfordshire', latitude: 51.9495, longitude: -0.28, country: 'England' },
       ] });
     }
+    if (u.includes('api.postcodes.io/postcodes?lat=') && /lat=53\./.test(u)) {
+      // A test place at 53.0: the sample points north of 53.004 fail, the rest return one postcode each.
+      const q = new URL(u).searchParams;
+      if (Number(q.get('lat')) > 53.004) return json({ error: 'down' }, 500);
+      return json({ result: [{ postcode: `ZZ${Math.round(Number(q.get('lat')) * 1e4) % 100} 1AA`, latitude: Number(q.get('lat')), longitude: Number(q.get('lon')), country: 'England' }] });
+    }
     if (u.includes('api.postcodes.io/postcodes?lat=')) {
       return json({ result: [
         { postcode: 'SG5 1NZ', latitude: 51.9535, longitude: -0.283, country: 'England' },
@@ -229,6 +235,8 @@ test('API flows with mocked services', async () => {
   assert.equal(f.verdict, 'higher', '1 of 2 postcodes has medium/high homes');
   // No postcodes found (e.g. postcodes.io down) is an error, not "Low risk area", and isn't cached.
   await assert.rejects(fl.flood(52.5, -0.283), /postcodes/i);
+  // Some nearby lookups failed: an incomplete area must not be summarised (or cached for a month).
+  await assert.rejects(fl.flood(53.0, -0.283), /postcodes/i);
 });
 
 test('Short inspections get a colour', async () => {

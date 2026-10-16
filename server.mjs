@@ -1,7 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT, loadEnv } from './lib/util.mjs';
+import { ROOT, loadEnv, isSafeWrite } from './lib/util.mjs';
 import { lookupLocation, nearbySchools, transport, crime, prices, DESTINATIONS } from './lib/sources.mjs';
 import { saveOverride } from './lib/catchment.mjs';
 import { flood } from './lib/flood.mjs';
@@ -73,6 +73,7 @@ const server = http.createServer(async (req, res) => {
   // Save or clear a school's "last distance offered" (only accepted from this computer).
   if (url.pathname === '/api/catchment' && req.method === 'POST') {
     try {
+      if (!isSafeWrite(req.headers)) throw Object.assign(new Error('Saves are only accepted from this app.'), { status: 403 });
       const { urn, metres, note } = await readBody(req);
       if (!/^\d{5,7}$/.test(String(urn))) throw Object.assign(new Error('Unknown school.'), { status: 400 });
       const m = metres === null || metres === '' ? null : Number(metres);
@@ -87,8 +88,11 @@ const server = http.createServer(async (req, res) => {
   // The saved shortlist (only reachable from this computer: the server binds to 127.0.0.1).
   if (url.pathname === '/api/shortlist') {
     try {
+      if (req.method !== 'GET' && !isSafeWrite(req.headers, { body: req.method === 'POST' })) {
+        throw Object.assign(new Error('Changes are only accepted from this app.'), { status: 403 });
+      }
       if (req.method === 'GET') send(res, 200, { entries: loadShortlist() });
-      else if (req.method === 'POST') send(res, 200, { saved: saveEntry(await readBody(req, 50000)) });
+      else if (req.method === 'POST') send(res, 200, { saved: saveEntry(await readBody(req, 50000), { mustExist: url.searchParams.get('refresh') === '1' }) });
       else if (req.method === 'DELETE') send(res, 200, { removed: removeEntry(String(url.searchParams.get('id') || '')) });
       else send(res, 405, { error: 'Method not allowed.' });
     } catch (e) {

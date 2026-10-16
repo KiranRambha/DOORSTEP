@@ -64,3 +64,19 @@ test('flood summary: Wales is not covered, border areas are partial', () => {
   assert.equal(border.partial, true);
   assert.equal(border.postcodesChecked, 1);
 });
+
+test('flood summary: a Welsh place near the border is not covered, even with English postcodes nearby', () => {
+  const data = { postcodes: { 'HR1 1AA': [5, 0, 0, 0, 0] } };
+  const s = floodSummary([
+    { postcode: 'NP16 5AA', country: 'Wales', distance: 40 },
+    { postcode: 'HR1 1AA', country: 'England', distance: 800 },
+  ], data);
+  assert.equal(s.covered, false);
+  assert.equal(s.label, 'No flood data for Wales');
+  const eng = floodSummary([
+    { postcode: 'HR1 1AA', country: 'England', distance: 40 },
+    { postcode: 'NP16 5AA', country: 'Wales', distance: 800 },
+  ], data);
+  assert.equal(eng.covered, true);
+  assert.equal(eng.partial, true);
+});

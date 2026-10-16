@@ -17,6 +17,18 @@ const FILE = path.join(tmpData, 'shortlist.json');
 const { loadShortlist, saveEntry, removeEntry } = await import(path.join(tmp, 'lib', 'shortlist.mjs'));
 const { shortlistId } = await import(path.join(tmp, 'public', 'snapshot.js'));
 
+const { isSafeWrite } = await import(path.join(tmp, 'lib', 'util.mjs'));
+
+test('writes are only accepted as JSON from this app, so other websites cannot change saved data', () => {
+  const h = (o) => ({ host: 'localhost:5173', ...o });
+  assert.equal(isSafeWrite(h({ 'content-type': 'application/json' })), true);
+  assert.equal(isSafeWrite(h({ 'content-type': 'application/json; charset=utf-8', origin: 'http://localhost:5173' })), true);
+  assert.equal(isSafeWrite(h({ 'content-type': 'text/plain' })), false, 'a form or text/plain POST skips the CORS preflight');
+  assert.equal(isSafeWrite(h({ 'content-type': 'application/json', origin: 'https://evil.example' })), false);
+  assert.equal(isSafeWrite(h({ origin: 'http://localhost:5173' }), { body: false }), true, 'DELETE has no body');
+  assert.equal(isSafeWrite(h({ origin: 'https://evil.example' }), { body: false }), false);
+});
+
 const place = (query, extra = {}) => ({ query, label: query, lat: 51.95, lng: -0.28, settings: {}, snapshot: {}, ...extra });
 
 test('shortlist ids: postcodes normalise, place names lower-case', () => {
@@ -46,6 +58,23 @@ test('shortlist: a damaged file is never overwritten', () => {
   assert.throws(() => removeEntry('hitchin'), /damaged/);
   assert.equal(fs.readFileSync(FILE, 'utf8'), '{ not json');
   fs.rmSync(FILE);
+});
+
+test('shortlist: a refresh never brings back a removed place', () => {
+  fs.rmSync(FILE, { force: true });
+  assert.throws(() => saveEntry(place('Hitchin'), { mustExist: true }), /no longer on your shortlist/);
+  assert.deepEqual(loadShortlist(), []);
+  saveEntry(place('Hitchin'));
+  assert.equal(saveEntry(place('Hitchin', { snapshot: { crime: { perMonth: 3 } } }), { mustExist: true }).snapshot.crime.perMonth, 3);
+  fs.rmSync(FILE);
+});
+
+test('shortlist: an unreadable file is an error, not an empty list', () => {
+  fs.mkdirSync(FILE); // reading a directory fails with EISDIR
+  assert.throws(() => loadShortlist(), /couldn't be read|damaged/i);
+  assert.throws(() => saveEntry(place('Hitchin')));
+  assert.ok(fs.statSync(FILE).isDirectory(), 'left alone');
+  fs.rmSync(FILE, { recursive: true });
 });
 
 test('shortlist: bad entries are rejected', () => {

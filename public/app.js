@@ -835,8 +835,8 @@ function floodZoomHint() {
 
 /* ───────────── Shortlist ───────────── */
 
-async function apiSend(method, path, body) {
-  const res = await fetch(path, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+async function apiSend(method, path, body, { keepalive = false } = {}) {
+  const res = await fetch(path, { method, keepalive, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
   const out = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(out.error || `Request failed (${res.status})`);
   return out;
@@ -881,28 +881,39 @@ function drawSaveButton() {
   $('#shortlist-link').textContent = state.shortlist.length ? `Shortlist (${state.shortlist.length})` : 'Shortlist';
 }
 
+let saving = false;
 async function toggleSave() {
   const q = state.query;
   const id = shortlistId(q);
+  // Saving again during the undo window just undoes the removal.
+  if (pendingRemoval?.id === id) return pendingRemoval.undo();
   const entry = state.shortlist.find((e) => e.id === id);
   if (entry) return removeWithUndo(entry);
+  if (saving) return;
+  saving = true;
+  $('#save-place').disabled = true;
   const settings = currentSettings();
   try {
     const { saved } = await apiSend('POST', '/api/shortlist', {
       query: q, label: state.place.label, area: state.place.area, lat: state.place.lat, lng: state.place.lng, country: state.place.country,
       settings, snapshot: buildSnapshot(state, settings),
     });
-    state.shortlist.push(saved);
+    const i = state.shortlist.findIndex((e) => e.id === saved.id);
+    if (i >= 0) state.shortlist[i] = saved; else state.shortlist.push(saved);
     showToast(`Saved ${saved.label} to your shortlist.`);
   } catch (e) {
     showToast(`Couldn't save: ${e.message}`);
   }
+  saving = false;
+  $('#save-place').disabled = false;
   drawSaveButton();
 }
 
 let toastTimer = null;
 function showToast(msg, action) {
   const t = $('#toast');
+  // A new message replaces an undo offer, so that removal goes ahead now.
+  pendingRemoval?.commit();
   clearTimeout(toastTimer);
   t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button type="button">${esc(action.label)}</button>` : ''}`;
   t.hidden = false;
@@ -913,7 +924,6 @@ function showToast(msg, action) {
 let pendingRemoval = null;
 /** Hide the place straight away, and only delete it once the 6-second undo has passed. */
 function removeWithUndo(entry) {
-  pendingRemoval?.commit();
   const i = state.shortlist.indexOf(entry);
   state.shortlist.splice(i, 1);
   let done = false;
@@ -921,18 +931,24 @@ function removeWithUndo(entry) {
     if (done) return;
     done = true;
     pendingRemoval = null;
-    apiSend('DELETE', `/api/shortlist?id=${encodeURIComponent(entry.id)}`).catch((e) => {
+    // keepalive lets the request finish even if the page is closing.
+    apiSend('DELETE', `/api/shortlist?id=${encodeURIComponent(entry.id)}`, null, { keepalive: true }).catch((e) => {
       state.shortlist.splice(Math.min(i, state.shortlist.length), 0, entry);
       showToast(`Couldn't remove it: ${e.message}`);
       redrawShortlistBits();
     });
   };
-  pendingRemoval = { commit };
-  showToast(`Removed ${entry.label}.`, {
-    label: 'Undo',
-    run: () => { done = true; pendingRemoval = null; state.shortlist.splice(Math.min(i, state.shortlist.length), 0, entry); redrawShortlistBits(); },
-    timeout: commit,
-  });
+  const undo = () => {
+    if (done) return;
+    done = true;
+    pendingRemoval = null;
+    clearTimeout(toastTimer);
+    $('#toast').hidden = true;
+    state.shortlist.splice(Math.min(i, state.shortlist.length), 0, entry);
+    redrawShortlistBits();
+  };
+  showToast(`Removed ${entry.label}.`, { label: 'Undo', run: undo, timeout: commit });
+  pendingRemoval = { id: entry.id, commit, undo };
   redrawShortlistBits();
 }
 // Don't lose a removal if the page is closed during the undo window.
@@ -948,11 +964,13 @@ async function refreshEntry(entry) {
   drawShortlist();
   try {
     const fresh = buildSnapshot(await fetchPlaceData(entry), entry.settings || {});
-    const { saved } = await apiSend('POST', '/api/shortlist', { ...entry, snapshot: mergeSnapshot(entry.snapshot, fresh) });
+    // Removed while the data was loading: don't bring it back.
+    if (!state.shortlist.some((e) => e.id === entry.id)) return;
+    const { saved } = await apiSend('POST', '/api/shortlist?refresh=1', { ...entry, snapshot: mergeSnapshot(entry.snapshot, fresh) });
     const i = state.shortlist.findIndex((e) => e.id === entry.id);
     if (i >= 0) state.shortlist[i] = saved;
   } catch (e) {
-    showToast(`Couldn't refresh ${entry.label}: ${e.message}`);
+    if (state.shortlist.some((x) => x.id === entry.id)) showToast(`Couldn't refresh ${entry.label}: ${e.message}`);
   } finally {
     state.slBusy.delete(entry.id);
     drawShortlist();
@@ -1014,42 +1032,44 @@ function slCell(e, col, best) {
       const t = sn.transport;
       if (!t) return none;
       if (!t.station) return td(`<span class="main">None nearby</span>${from(t)}`);
-      return td(`<span class="main">${esc(t.station.name)}</span><small>${dist(t.station.distance)} · ${t.station.walkMin} min walk</small>${from(t)}`);
+      return td(`<span class="main">${esc(t.station.name)}</span><small>${dist(Number(t.station.distance))} · ${Number(t.station.walkMin)} min walk</small>${from(t)}`);
     }
     case 'door': {
       const t = sn.transport;
       if (!t?.door) return none;
-      return td(`<span class="main">${t.door.minutes} min</span><small>${t.door.changes ? `${t.door.changes} change${t.door.changes === 1 ? '' : 's'}` : 'direct'} · to ${esc(String(t.destination || '').split(' (')[0])}</small>${from(t)}`);
+      const ch = Number(t.door.changes) || 0;
+      return td(`<span class="main">${Number(t.door.minutes)} min</span><small>${ch ? `${ch} change${ch === 1 ? '' : 's'}` : 'direct'} · to ${esc(String(t.destination || '').split(' (')[0])}</small>${from(t)}`);
     }
     case 'primary':
     case 'secondary': {
       const sc = sn.schools;
       if (!sc) return none;
       const p = sc[col];
-      if (!p) return td(`<span class="main">None</span><small>within ${dist(sc.radius)}</small>${from(sc)}`);
+      if (!p) return td(`<span class="main">None</span><small>within ${dist(Number(sc.radius))}</small>${from(sc)}`);
       const [head] = splitLabel(p.label);
-      return td(`<span class="main">${esc(p.name)}</span><small>${dist(p.distance)} away</small><span class="chip ${esc(p.estimate)}">${esc(head)}</span>${p.likely ? '' : '<small>no likely Outstanding school</small>'}${from(sc)}`);
+      return td(`<span class="main">${esc(p.name)}</span><small>${dist(Number(p.distance))} away</small><span class="chip ${esc(p.estimate)}">${esc(head)}</span>${p.likely ? '' : '<small>no likely Outstanding school</small>'}${from(sc)}`);
     }
     case 'detached':
     case 'semi': {
       const pr = sn.prices;
       const v = pr?.[col];
       if (!v) return none;
-      const opts = [pr.radiusM ? `${pr.radiusM / 1000} km` : '', pr.years ? `${pr.years} yrs` : '', pr.sizeMin ? `${pr.sizeMin}+ rooms` : ''].filter(Boolean).join(' · ');
-      return td(`<span class="main">${gbpShort(v.median)}</span><small>${v.count} sale${v.count === 1 ? '' : 's'}${opts ? ` · ${opts}` : ''}</small>${from(pr)}`);
+      const opts = [pr.radiusM ? `${Number(pr.radiusM) / 1000} km` : '', pr.years ? `${Number(pr.years)} yrs` : '', pr.sizeMin ? `${Number(pr.sizeMin)}+ rooms` : ''].filter(Boolean).join(' · ');
+      const n = Number(v.count) || 0;
+      return td(`<span class="main">${gbpShort(Number(v.median))}</span><small>${n} sale${n === 1 ? '' : 's'}${opts ? ` · ${opts}` : ''}</small>${from(pr)}`);
     }
     case 'crime': {
       const c = sn.crime;
       if (!c) return none;
-      const pct = c.trendPct;
+      const pct = c.trendPct == null ? null : Number(c.trendPct);
       const trend = pct == null ? 'no trend yet' : pct < -2 ? `↓ ${Math.abs(pct)}% on last year` : pct > 2 ? `↑ ${pct}% on last year` : '→ about the same';
-      return td(`<span class="main">${Math.round(c.perMonth).toLocaleString('en-GB')} a month</span><small>${trend}</small>${from(c)}`);
+      return td(`<span class="main">${Math.round(Number(c.perMonth)).toLocaleString('en-GB')} a month</span><small>${trend}</small>${from(c)}`);
     }
     case 'flood': {
       const f = sn.flood;
       if (!f) return none;
       if (!f.covered) return td('<span class="chip">No data</span><small>Wales not covered</small>');
-      return td(`<span class="chip flood-${esc(f.verdict)}">${esc(f.label)}</span><small>${f.medHigh.toLocaleString('en-GB')} homes medium/high</small>${from(f)}`);
+      return td(`<span class="chip flood-${esc(f.verdict)}">${esc(f.label)}</span><small>${Number(f.medHigh).toLocaleString('en-GB')} homes medium/high</small>${from(f)}`);
     }
   }
   return none;
