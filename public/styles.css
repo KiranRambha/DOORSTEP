@@ -42,6 +42,8 @@
 }
 
 * { box-sizing: border-box; }
+/* iPhone Safari enlarges text in wide content (like the schools table) unless told not to. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 [hidden] { display: none !important; }
 body {
   margin: 0;
@@ -515,4 +517,9 @@ table.sl td.best .chip.in, table.sl td.best .chip.likely, table.sl td.best .chip
   .top-inner { gap: 8px 14px; }
   .search { order: 2; flex-basis: 100%; max-width: none; margin-left: 0; }
   #find-link { margin-left: auto; }
+}
+/* Phones: the Ofsted rating is secondary to the school name, so keep it smaller and lighter. */
+@media (max-width: 520px) {
+  table.schools .badge { font-size: 12px; font-weight: 500; }
+  table.schools .badge-wrap small { font-size: 11px; }
 }
