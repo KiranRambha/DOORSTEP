@@ -128,8 +128,11 @@ test('station setup: outside London only, fastest terminus, resume uses the cach
   };
   const { buildStations } = await import(path.join(tmp, 'lib', 'stations.mjs'));
   const { TERMINI } = await import(path.join(tmp, 'lib', 'sources.mjs'));
-  const out = await buildStations({ log: () => {} });
+  const lines = [];
+  const out = await buildStations({ log: (m) => lines.push(m) });
   assert.deepEqual(out.stations.map((s) => s.name), ['Harpenden']);
+  // Failed journeys are summarised by reason, so a bad run can be diagnosed.
+  assert.ok(lines.some((l) => /16 journeys failed/.test(l) && /No journey found/.test(l)), lines.join('\n'));
   const h = out.stations[0];
   assert.equal(h.trainMin, 27); // the train only, not TfL's 42 with walks
   assert.equal(h.terminus, 'stpancras'); // the fastest of every terminus, wherever it is
