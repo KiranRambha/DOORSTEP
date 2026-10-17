@@ -92,6 +92,7 @@ const json = (body, status = 200) => ({ ok: status < 400, status, json: async ()
 const NAPTAN = [
   'ATCOCode,CommonName,Longitude,Latitude,StopType,Status',
   '9100HRPNDN,Harpenden Rail Station,-0.35148,51.81464,RLY,active',
+  '9100HRPNDNX,Harpenden Rail Station,-0.35150,51.81466,RLY,active', // NaPTAN lists some stations twice
   '9100CLPHMJN,Clapham Junction Rail Station,-0.1703,51.4642,RLY,active',
   '9100NRCH,Norwich Rail Station,1.3069,52.6273,RLY,active',
   '9100NOWHERE,Nowhere Rail Station,-0.2,51.9,RLY,active',
@@ -145,7 +146,7 @@ test('station setup: outside London only, fastest terminus, resume uses the cach
   assert.equal(h.postcode, 'AL5 4FQ');
   assert.equal(TERMINI.length, 16);
   assert.equal(out.failed, 1); // Nowhere: no journey
-  assert.equal(tflCalls, 32); // every terminus for Harpenden and Nowhere
+  assert.equal(tflCalls, 48); // every terminus for both Harpenden entries and Nowhere
   tflCalls = 0;
   await buildStations({ log: () => {}, gapMs: 0 });
   assert.equal(tflCalls, 16); // Harpenden cached; Nowhere's failures retried
