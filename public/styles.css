@@ -54,6 +54,8 @@ body {
 }
 h1, h2, h3 { font-family: var(--display); font-weight: 700; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
 button, input, select { font: inherit; color: inherit; }
+/* iPhone Safari zooms in on any field under 16px when it's tapped, and doesn't zoom back out. */
+@media (pointer: coarse) { input, select, textarea { font-size: 16px; } }
 a { color: var(--accent); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .num, td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -252,7 +254,9 @@ select {
 
 /* Expanded school row: Ofsted grades left, catchment right. The whole row is clickable. */
 tr.school-row { cursor: pointer; }
-tr.school-row:hover td { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+/* Hover tint only where there's a real pointer: iPhone keeps :hover stuck on the last tapped row,
+   which left a closed card tinted cell by cell. */
+@media (hover: hover) { tr.school-row:hover td { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); } }
 tr.school-row.is-open td { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); border-bottom-color: transparent; }
 .school-toggle { all: unset; cursor: pointer; display: block; }
 .school-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
