@@ -226,6 +226,14 @@ test('overall score: default weights match the owner\'s choice', () => {
   assert.deepEqual(snap.DEFAULT_WEIGHTS, { door: 'high', schools: 'high', price: 'high', walk: 'medium', crime: 'medium', flood: 'low' });
 });
 
+test('floor area in sq ft, rounded to the nearest 10', () => {
+  assert.equal(snap.sqft(115), '1,240 sq ft'); // 115 m² = 1,237.8 sq ft
+  assert.equal(snap.sqft(92.9), '1,000 sq ft');
+  assert.equal(snap.sqft(50), '540 sq ft');
+  assert.equal(snap.sqft(0), null);
+  assert.equal(snap.sqft(null), null);
+});
+
 test('faith label for the school cells', () => {
   assert.equal(snap.faithLabel({ faith: 'none' }), 'faith: no faith');
   assert.equal(snap.faithLabel({ faith: 'catholic', hideFaith: true }), 'faith: Catholic · faith schools hidden');

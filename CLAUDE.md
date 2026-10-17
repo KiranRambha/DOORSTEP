@@ -137,6 +137,7 @@ npm test        # node:test, fully offline, every API mocked
 - **Errors in plain English:** pass any error text through `friendlyError()` (`public/errors.js`) before showing it; never show raw API responses.
 - Every panel says how current its data is ("Ofsted results as at…", "most recent sale recorded…", "police data up to…").
 - Distances and prices use the body font with tabular numbers (no monospace).
+- Floor area shows in **sq ft** rounded to the nearest 10 ("1,240 sq ft", `sqft()` in `public/snapshot.js`), with m² on hover. The owner chose this over "1.2k" so 100 sq ft differences stay visible.
 - Custom select chevrons sit about 8px from the right edge (the owner checked this).
 - Keep the map legend visible: the map column is a flex column sized to the viewport.
 - The owner likes being asked before big redesigns, and likes an honest critique when asked "does it look good?".

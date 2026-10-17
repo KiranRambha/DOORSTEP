@@ -18,6 +18,9 @@ export const isFaithSchool = (s) => !NO_FAITH_VALUES.includes(s.religion);
 /** Walking time to the station, from straight-line distance at 80 m a minute (a bit optimistic). */
 export const walkMinutes = (metres) => Math.ceil(metres / 80);
 
+/** EPC floor area (m²) as UK listings show it: "1,240 sq ft", to the nearest 10. */
+export const sqft = (m2) => (m2 > 0 ? `${(Math.round((m2 * 10.7639) / 10) * 10).toLocaleString('en-GB')} sq ft` : null);
+
 /** Crime this year against the year before, as a whole percentage, or null without history. */
 export function crimeTrendPct(c, now = c.total, before = c.previous?.total) {
   if (!c.previous || !before) return null;

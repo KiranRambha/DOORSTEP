@@ -1,6 +1,6 @@
 import { initFind, showFind } from './find-view.js';
 import { friendlyError } from './errors.js';
-import { median, chance, goodChance, isFaithSchool, crimeTrendPct, shortlistId, buildSnapshot, mergeSnapshot, bestInColumn, faithLabel, faithSettingsDiffer, scoreShortlist, DEFAULT_WEIGHTS, WEIGHT_VALUES, FACTOR_NAMES } from './snapshot.js';
+import { median, chance, goodChance, isFaithSchool, crimeTrendPct, shortlistId, buildSnapshot, mergeSnapshot, bestInColumn, faithLabel, faithSettingsDiffer, sqft, scoreShortlist, DEFAULT_WEIGHTS, WEIGHT_VALUES, FACTOR_NAMES } from './snapshot.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -562,7 +562,7 @@ function drawPrices() {
     <tbody>${shown.map((s) => `<tr>
       <td><span class="addr">${esc(title([s.saon, s.paon, s.street].filter(Boolean).join(' ')))}</span> <span class="school-meta">${esc(s.postcode)}${s.newBuild ? ' · new build' : ''}</span></td>
       <td><span class="type-tag ${s.type === 'Detached' ? 'det' : 'semi'}">${s.type === 'Semi-detached' ? 'Semi' : 'Detached'}</span></td>
-      ${epc ? `<td class="num">${s.habitableRooms ?? '–'}</td><td class="num">${s.floorArea ? `${Math.round(s.floorArea)} m²` : '–'}</td>` : ''}
+      ${epc ? `<td class="num">${s.habitableRooms ?? '–'}</td><td class="num"${s.floorArea ? ` title="${Math.round(s.floorArea)} m²"` : ''}>${sqft(s.floorArea) || '–'}</td>` : ''}
       <td class="num muted">${new Date(s.date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</td>
       <td class="num strong">${gbp(s.price)}</td></tr>`).join('')}</tbody></table></div>
     ${sales.length > 8 ? `<button class="more" type="button" id="sales-more">${state.showAllSales ? 'Show fewer' : `Show all ${sales.length} sales`}</button>` : ''}
