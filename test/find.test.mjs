@@ -238,11 +238,11 @@ function priceMocks(flags) {
       ] });
     }
     if (u.includes('landregistry.data.gov.uk') && flags.many) {
-      // 50 sales, one a week: only the 40 most recent should get room counts.
-      const bindings = Array.from({ length: 50 }, (_, i) => ({ tx: { value: `tx-${i}` }, amount: { value: '700000' },
+      // 100 sales, one a week: only the 80 most recent should get room counts.
+      const bindings = Array.from({ length: 100 }, (_, i) => ({ tx: { value: `tx-${i}` }, amount: { value: '700000' },
         date: { value: new Date(Date.UTC(2026, 5, 1) - i * 7 * 864e5).toISOString().slice(0, 10) },
         type: { value: 'http://landregistry.data.gov.uk/def/common/detached' }, paon: { value: String(i + 1) }, street: { value: 'HIGH STREET' },
-        pc: { value: i < 25 ? 'AL5 1AA' : 'AL5 2BB' }, category: { value: 'http://landregistry.data.gov.uk/def/ppi/standardPricePaidTransaction' } }));
+        pc: { value: i < 50 ? 'AL5 1AA' : 'AL5 2BB' }, category: { value: 'http://landregistry.data.gov.uk/def/ppi/standardPricePaidTransaction' } }));
       return json({ results: { bindings } });
     }
     if (u.includes('landregistry.data.gov.uk')) {
@@ -261,7 +261,7 @@ function priceMocks(flags) {
       if (flags.epcDown) return json({ error: 'down' }, 503);
       if (u.includes('/api/domestic/search')) {
         const pc = decodeURIComponent(new URL(u).searchParams.get('postcode')).replace('+', ' ');
-        const paons = flags.many ? Array.from({ length: 50 }, (_, i) => String(i + 1)) : pc === 'AL5 1AA' ? ['1', '2', '3', '4', '5'] : ['6'];
+        const paons = flags.many ? Array.from({ length: 100 }, (_, i) => String(i + 1)) : pc === 'AL5 1AA' ? ['1', '2', '3', '4', '5'] : ['6'];
         return json({ data: paons.map((p) => ({ certificateNumber: `C${p}`, addressLine1: `${p} HIGH STREET`, registrationDate: '2025-01-01' })) });
       }
       return json({ data: { habitable_room_count: 6, total_floor_area: 140 } });
@@ -326,7 +326,7 @@ test('station price: a partial postcode lookup is an error, not a thinner cached
   assert.equal((await stationPrice('9100HRPNDN', 900000)).sales.length, 6);
 });
 
-test('station price: room counts for the 40 most recent sales only, with EPC calls spaced out', async () => {
+test('station price: room counts for the 80 most recent sales only, with EPC calls spaced out', async () => {
   process.env.EPC_TOKEN = 'test';
   process.env.FIND_EPC_GAP_MS = '20';
   const flags = { epcCalls: 0, many: true, epcStarts: [] };
@@ -335,10 +335,10 @@ test('station price: room counts for the 40 most recent sales only, with EPC cal
   const { stationPrice } = await import(path.join(tmp, 'lib', 'stations.mjs'));
   const r = await stationPrice('9100HRPNDN', 900000);
   delete process.env.FIND_EPC_GAP_MS;
-  assert.equal(r.sales.length, 50);
-  assert.equal(flags.certCalls, 40); // the EPC service rate-limits, so sample rather than check every sale
-  assert.equal(r.sales.filter((s) => s.rooms != null).length, 40);
-  assert.equal(r.sales.filter((s) => s.rooms != null).every((s) => s.date >= '2025-07-01'), true); // the most recent
+  assert.equal(r.sales.length, 100);
+  assert.equal(flags.certCalls, 80); // the EPC service rate-limits, so sample rather than check every sale
+  assert.equal(r.sales.filter((s) => s.rooms != null).length, 80);
+  assert.equal(r.sales.filter((s) => s.rooms != null).every((s) => s.date >= '2024-11-20'), true); // the most recent
   const gaps = flags.epcStarts.slice(1).map((t, i) => t - flags.epcStarts[i]);
   assert.ok(Math.min(...gaps) >= 15, `EPC calls ${Math.min(...gaps)} ms apart`);
 });
