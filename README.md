@@ -8,7 +8,7 @@ A small local web app that answers "what's it like to live here?" for any postco
 - **Crime** reported within about a mile over the last 12 months
 - **Flood risk** from rivers and the sea for the area around the address, plus flood maps (England)
 - A **shortlist** to save places and compare them side by side
-- **Find places**: stations outside London within your chosen door-to-door time of a central terminus, with good schools you'd likely get into and houses with the bedrooms you need under your budget
+- **Find places**: stations outside London (or in London zones 3–6) within your chosen door-to-door time of a central terminus, with good schools you'd likely get into and houses with the bedrooms you need under your budget
 
 Everything comes from free, open government data. No accounts are needed for the basics.
 
@@ -30,10 +30,11 @@ For **Find places**, also run `npm run setup:stations` once (10 to 40 minutes, b
 
 ## Find places
 
-Open **Find places** in the top bar to search the other way round: instead of checking one place, it lists stations outside London that fit your settings, ranked by train time, with a map.
+Open **Find places** in the top bar to search the other way round: instead of checking one place, it lists stations that fit your settings, ranked by train time, with a map. It covers rail, Tube and DLR stations outside Greater London (including zones 7–9) and in London zones 3–6.
 
-- **Door to door** (45 to 90 min), **Walk to the station** (5 to 15 min), **Budget** (£400k to £1.5m), **Bedrooms** (3+, 4+ or 5+), **Schools** (Good or Outstanding, Outstanding primary, Outstanding secondary, or both) and **Your faith**.
+- **Area** (Outside London, London zones 3–6, or both), **Door to door** (45 to 90 min), **Walk to the station** (5 to 15 min), **Budget** (£400k to £1.5m), **Bedrooms** (3+, 4+ or 5+), **Schools** (Good or Outstanding, Outstanding primary, Outstanding secondary, or both) and **Your faith**.
 - Each match shows the train time and changes, the best primary and secondary you'd likely get into, the typical price for your bedroom count, and flood risk. Click one to open the full view for that area.
+- In London, terraced houses count in the price too, since most London 4-beds are terraced. London school catchments are often tighter than the app's estimate, so check the council's figures.
 - Results come 20 to a page; the map shows the pins for the current page.
 - Prices fill in as you watch, and the first search takes a few minutes. Bedroom counts are estimated from energy certificates for the 80 most recent sales near each station, so they need the EPC token below.
 
