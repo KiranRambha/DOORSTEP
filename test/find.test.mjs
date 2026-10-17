@@ -101,6 +101,8 @@ const NAPTAN = [
 test('station setup: outside London only, fastest terminus, resume uses the cache', async () => {
   const tmp = tempProject();
   let tflCalls = 0;
+  let inFlight = 0;
+  let maxInFlight = 0;
   globalThis.fetch = async (url, opts = {}) => {
     const u = String(url);
     if (u.includes('naptan.api.dft.gov.uk')) return { ok: true, status: 200, text: async () => NAPTAN };
@@ -113,6 +115,9 @@ test('station setup: outside London only, fastest terminus, resume uses the cach
     }
     if (u.includes('api.tfl.gov.uk/Journey')) {
       tflCalls++;
+      inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 2));
+      inFlight--;
       // Station to station by TfL code: coordinates far from London get "No journey found".
       assert.match(u, /JourneyResults\/910G[A-Z]+\/to\/910G[A-Z]+\?/);
       if (u.includes('/910GNOWHERE/')) return json({ message: 'No journey found for your inputs.' }, 404);
@@ -129,7 +134,8 @@ test('station setup: outside London only, fastest terminus, resume uses the cach
   const { buildStations } = await import(path.join(tmp, 'lib', 'stations.mjs'));
   const { TERMINI } = await import(path.join(tmp, 'lib', 'sources.mjs'));
   const lines = [];
-  const out = await buildStations({ log: (m) => lines.push(m) });
+  const out = await buildStations({ log: (m) => lines.push(m), gapMs: 0 });
+  assert.ok(maxInFlight <= 4, `TfL calls in flight at once: ${maxInFlight}`); // TfL allows 500 a minute
   assert.deepEqual(out.stations.map((s) => s.name), ['Harpenden']);
   // Failed journeys are summarised by reason, so a bad run can be diagnosed.
   assert.ok(lines.some((l) => /16 journeys failed/.test(l) && /No journey found/.test(l)), lines.join('\n'));
@@ -141,7 +147,7 @@ test('station setup: outside London only, fastest terminus, resume uses the cach
   assert.equal(out.failed, 1); // Nowhere: no journey
   assert.equal(tflCalls, 32); // every terminus for Harpenden and Nowhere
   tflCalls = 0;
-  await buildStations({ log: () => {} });
+  await buildStations({ log: () => {}, gapMs: 0 });
   assert.equal(tflCalls, 16); // Harpenden cached; Nowhere's failures retried
 });
 
