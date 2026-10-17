@@ -470,6 +470,10 @@ table.sl tr.busy td { opacity: .55; }
 .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 2000; display: flex; gap: 14px; align-items: center; background: var(--ink); color: var(--bg); padding: 10px 14px 10px 16px; border-radius: 10px; box-shadow: 0 6px 24px rgba(0, 0, 0, .25); max-width: calc(100vw - 32px); }
 .toast button { all: unset; cursor: pointer; font-weight: 700; color: var(--accent-soft); text-decoration: underline; }
 
+.sl-weights { margin: 0 0 12px; align-items: center; }
+.sl-weights-label { font-weight: 600; color: var(--ink); }
+table.sl td small.sl-win { color: var(--great); }
+table.sl td small.sl-loss { color: var(--poor); }
 .sl-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .sl-warn { margin: 0 0 10px; padding: 10px 14px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--mixed) 45%, transparent); background: color-mix(in srgb, var(--mixed) 12%, transparent); font-size: 13.5px; }
 /* Pills sit on the green "best" shading, so give them their own background to stay readable. */

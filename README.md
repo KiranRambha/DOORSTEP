@@ -81,7 +81,9 @@ The Flood risk panel uses the Environment Agency's list of postcodes with homes 
 
 ## Shortlist
 
-Press **☆ Save to shortlist** next to a place's name to keep a snapshot of it: nearest station and walk, commute, the nearest Outstanding primary and secondary you'd likely get into, median detached and semi prices, crime and flood risk. **Shortlist** in the top bar compares them in one table, with the best in each column shaded green. Click a heading to sort.
+Press **☆ Save to shortlist** next to a place's name to keep a snapshot of it: nearest station and walk, commute, the nearest Outstanding primary and secondary you'd likely get into, median detached and semi prices, crime and flood risk. **Shortlist** in the top bar compares them in one table, ranked by an overall score out of 100, with the best in each column shaded green. Click a heading to sort by that column instead.
+
+- **What matters:** set Commute, Schools, Price, Walk to station, Crime and Flood to High, Medium, Low or Off, and the ranking updates straight away. Each place's score shows its main strengths (+) and weaknesses (−). Price uses the cheaper of the detached and semi medians. Scores compare the places on your list with each other, so adding a place can move the others.
 
 - Snapshots don't change by themselves. Press **Refresh** on a row (or **Refresh all**) to update them using the settings you saved them with. If a source fails during a refresh, the old figure stays, marked "from" its date.
 - Removing a place gives you a few seconds to undo.

@@ -119,3 +119,77 @@ export function bestInColumn(entries) {
   }
   return out;
 }
+
+/* ───────── Overall score (the owner chose adjustable weights, 17 Oct 2026) ───────── */
+
+export const WEIGHT_VALUES = { high: 3, medium: 2, low: 1, off: 0 };
+export const DEFAULT_WEIGHTS = { door: 'high', schools: 'high', price: 'high', walk: 'medium', crime: 'medium', flood: 'low' };
+export const FACTOR_NAMES = { door: 'commute', schools: 'schools', price: 'price', walk: 'walk', crime: 'crime', flood: 'flood' };
+
+// Lower is better for each; null means no figure. Price is the cheaper of the detached and semi medians.
+const FACTORS = {
+  door: (s) => s.transport?.door?.minutes,
+  schools: (s) => s.schools,
+  price: (s) => {
+    const p = [s.prices?.detached?.median, s.prices?.semi?.median].filter((v) => v != null);
+    return p.length ? Math.min(...p) : null;
+  },
+  walk: (s) => s.transport?.station?.walkMin,
+  crime: (s) => s.crime?.perMonth,
+  flood: (s) => (s.flood?.covered ? s.flood.medHigh : null),
+};
+
+// Schools aren't compared between places: a likely Outstanding school is full marks, an Outstanding one
+// you'd probably not get into is 30, none is 0. Primary and secondary are averaged.
+const phaseScore = (p) => (!p ? 0 : p.likely ? 100 : 30);
+
+/** Score each shortlist row 0-100 from weighted factors. Other factors are scaled across the shortlist
+ *  (best 100, worst 0). A missing figure is left out of that row's score, not counted against it.
+ *  Returns { [id]: { score, rank, wins, losses, missing } }; wins/losses are factor keys. */
+export function scoreShortlist(entries, weights = DEFAULT_WEIGHTS) {
+  const active = Object.keys(FACTORS).filter((k) => (WEIGHT_VALUES[weights[k]] ?? 0) > 0);
+  const per = {}; // factor -> id -> 0..100, plus whether the factor separates places at all
+  const spread = {};
+  for (const k of active) {
+    per[k] = {};
+    if (k === 'schools') {
+      for (const e of entries) {
+        const s = e.snapshot?.schools;
+        if (s) per[k][e.id] = (phaseScore(s.primary) + phaseScore(s.secondary)) / 2;
+      }
+      const v = Object.values(per[k]);
+      spread[k] = v.length > 1 && Math.max(...v) !== Math.min(...v);
+      continue;
+    }
+    const vals = entries.map((e) => [e.id, FACTORS[k](e.snapshot || {})]).filter(([, v]) => v != null);
+    const lo = Math.min(...vals.map(([, v]) => v));
+    const hi = Math.max(...vals.map(([, v]) => v));
+    spread[k] = vals.length > 1 && hi > lo;
+    for (const [id, v] of vals) per[k][id] = hi > lo ? (100 * (hi - v)) / (hi - lo) : 100;
+  }
+  const out = {};
+  for (const e of entries) {
+    let sum = 0;
+    let total = 0;
+    const missing = [];
+    for (const k of active) {
+      const v = per[k][e.id];
+      if (v == null) { missing.push(k); continue; }
+      sum += v * WEIGHT_VALUES[weights[k]];
+      total += WEIGHT_VALUES[weights[k]];
+    }
+    const score = total ? Math.round(sum / total) : null;
+    const counted = active.filter((k) => spread[k] && per[k][e.id] != null);
+    out[e.id] = {
+      score,
+      rank: null,
+      // At most two each, strongest (or weakest) first, so the cell stays readable.
+      wins: score == null ? [] : counted.filter((k) => per[k][e.id] >= 75).sort((a, b) => per[b][e.id] - per[a][e.id]).slice(0, 2),
+      losses: score == null ? [] : counted.filter((k) => per[k][e.id] <= 25).sort((a, b) => per[a][e.id] - per[b][e.id]).slice(0, 2),
+      missing: score == null ? [] : missing,
+    };
+  }
+  const scores = Object.values(out).map((o) => o.score).filter((s) => s != null);
+  for (const o of Object.values(out)) if (o.score != null) o.rank = 1 + scores.filter((s) => s > o.score).length;
+  return out;
+}

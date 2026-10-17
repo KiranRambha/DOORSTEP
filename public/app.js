@@ -1,6 +1,6 @@
 import { initFind, showFind } from './find-view.js';
 import { friendlyError } from './errors.js';
-import { median, chance, goodChance, isFaithSchool, crimeTrendPct, shortlistId, buildSnapshot, mergeSnapshot, bestInColumn, faithLabel, faithSettingsDiffer } from './snapshot.js';
+import { median, chance, goodChance, isFaithSchool, crimeTrendPct, shortlistId, buildSnapshot, mergeSnapshot, bestInColumn, faithLabel, faithSettingsDiffer, scoreShortlist, DEFAULT_WEIGHTS, WEIGHT_VALUES, FACTOR_NAMES } from './snapshot.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -995,9 +995,28 @@ async function refreshAll(useCurrent = false) {
 
 const shortDay = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 
+/* "What matters" weights for the overall score, remembered in this browser. */
+const WEIGHTS_KEY = 'doorstep.sl.weights';
+function slWeights() {
+  try { return { ...DEFAULT_WEIGHTS, ...JSON.parse(localStorage.getItem(WEIGHTS_KEY) || '{}') }; } catch { return { ...DEFAULT_WEIGHTS }; }
+}
+function setSlWeight(k, v) {
+  const w = { ...slWeights(), [k]: v };
+  try { localStorage.setItem(WEIGHTS_KEY, JSON.stringify(w)); } catch { /* ignore */ }
+}
+const WEIGHT_FACTORS = [['door', 'Commute'], ['schools', 'Schools'], ['price', 'Price'], ['walk', 'Walk to station'], ['crime', 'Crime'], ['flood', 'Flood']];
+
+function drawWeights() {
+  const w = slWeights();
+  $('#sl-weights').innerHTML = '<span class="mini sl-weights-label">What matters</span>' + WEIGHT_FACTORS.map(([k, label]) =>
+    `<label class="mini">${label} <select data-weight="${k}">${Object.keys(WEIGHT_VALUES).map((v) =>
+      `<option value="${v}"${w[k] === v ? ' selected' : ''}>${v[0].toUpperCase() + v.slice(1)}</option>`).join('')}</select></label>`).join('');
+}
+
 // Sort keys (lower first). Schools you'd likely get into sort ahead of fallbacks.
 const SL_SORT = {
   place: (e) => e.label.toLowerCase(),
+  score: (e) => { const sc = state.slScores?.[e.id]?.score; return sc == null ? null : -sc; }, // highest first
   walk: (e) => e.snapshot.transport?.station?.walkMin,
   door: (e) => e.snapshot.transport?.door?.minutes,
   primary: (e) => { const p = e.snapshot.schools?.primary; return p ? p.distance + (p.likely ? 0 : 1e6) : null; },
@@ -1008,13 +1027,13 @@ const SL_SORT = {
   flood: (e) => (e.snapshot.flood?.covered ? e.snapshot.flood.medHigh : null),
 };
 const SL_COLS = [
-  ['place', 'Place'], ['walk', 'Nearest station'], ['door', 'Commute'], ['primary', 'Outstanding primary'], ['secondary', 'Outstanding secondary'],
+  ['place', 'Place'], ['score', 'Score'], ['walk', 'Nearest station'], ['door', 'Commute'], ['primary', 'Outstanding primary'], ['secondary', 'Outstanding secondary'],
   ['detached', 'Median detached'], ['semi', 'Median semi'], ['crime', 'Crime'], ['flood', 'Flood risk'],
 ];
 
 function sortedShortlist() {
   const list = [...state.shortlist];
-  const s = state.slSort;
+  const s = slSortNow();
   if (!s) return list;
   const key = SL_SORT[s.col];
   // Rows without a value always go last.
@@ -1082,6 +1101,21 @@ function slCell(e, col, best) {
   return none;
 }
 
+// No column picked: ranked by the overall score (unless every factor is Off, then saved order).
+const slSortNow = () => state.slSort || (Object.values(state.slScores || {}).some((o) => o.score != null) ? { col: 'score', dir: 1 } : null);
+
+function scoreCell(e, top) {
+  const o = state.slScores?.[e.id];
+  if (!o || o.score == null) return '<td><span class="main">–</span></td>';
+  const names = (ks) => ks.map((k) => FACTOR_NAMES[k]).join(', ');
+  const lines = [
+    o.wins.length ? `<small class="sl-win">+ ${esc(names(o.wins))}</small>` : '',
+    o.losses.length ? `<small class="sl-loss">− ${esc(names(o.losses))}</small>` : '',
+    o.missing.length ? `<small>no figure: ${esc(names(o.missing))}</small>` : '',
+  ].join('');
+  return `<td${top ? ' class="best"' : ''}><span class="main">#${o.rank} · ${o.score}</span>${lines}</td>`;
+}
+
 function drawShortlist() {
   const body = $('#sl-body');
   $('#sl-refresh-all').hidden = !state.shortlist.length;
@@ -1091,11 +1125,15 @@ function drawShortlist() {
     body.innerHTML = '<div class="sl-wrap"><p class="empty">Nothing saved yet. Look up a place and press ☆ Save to shortlist.</p></div>';
     return;
   }
+  drawWeights();
   const best = bestInColumn(state.shortlist);
-  const s = state.slSort;
+  state.slScores = scoreShortlist(state.shortlist, slWeights());
+  const s = slSortNow();
   const head = SL_COLS.map(([k, label]) => {
     const sorted = s?.col === k;
-    return `<th${sorted ? ` aria-sort="${s.dir > 0 ? 'ascending' : 'descending'}"` : ''}><button type="button" data-sort="${k}">${label}${sorted ? (s.dir > 0 ? ' ↑' : ' ↓') : ''}</button></th>`;
+    // Score sorts highest first, so its arrows are the other way round.
+    const up = k === 'score' ? s?.dir < 0 : s?.dir > 0;
+    return `<th${sorted ? ` aria-sort="${up ? 'ascending' : 'descending'}"` : ''}><button type="button" data-sort="${k}">${label}${sorted ? (up ? ' ↑' : ' ↓') : ''}</button></th>`;
   }).join('') + '<th><span class="sr">Actions</span></th>';
   const rows = sortedShortlist().map((e) => {
     const busy = state.slBusy.has(e.id);
@@ -1104,7 +1142,8 @@ function drawShortlist() {
     const href = `?q=${encodeURIComponent(e.query)}&dest=${encodeURIComponent(e.settings?.dest || 'bank')}`;
     return `<tr data-id="${esc(e.id)}"${busy ? ' class="busy"' : ''}>
       <td class="sl-place"><a href="${href}">${esc(e.label)}</a><small>${esc(e.area || '')}</small><small>${busy ? 'Refreshing…' : `updated ${shortDay(when)}`}${old}</small></td>
-      ${SL_COLS.slice(1).map(([k]) => slCell(e, k, best)).join('')}
+      ${scoreCell(e, state.shortlist.length > 1 && state.slScores[e.id]?.rank === 1)}
+      ${SL_COLS.slice(2).map(([k]) => slCell(e, k, best)).join('')}
       <td class="actions"><button type="button" class="btn small" data-act="refresh"${busy ? ' disabled' : ''}>Refresh</button>
         <button type="button" class="btn icon" data-act="remove" aria-label="Remove ${esc(e.label)}" title="Remove">✕</button></td>
     </tr>`;
@@ -1320,10 +1359,16 @@ async function boot() {
   });
   $('#sl-refresh-all').addEventListener('click', () => refreshAll(false));
   $('#sl-refresh-current').addEventListener('click', () => refreshAll(true));
+  $('#sl-weights').addEventListener('change', (e) => {
+    const sel = e.target.closest('[data-weight]');
+    if (!sel) return;
+    setSlWeight(sel.dataset.weight, sel.value);
+    drawShortlist();
+  });
   $('#sl-body').addEventListener('click', (e) => {
     const sort = e.target.closest('[data-sort]')?.dataset.sort;
     if (sort) {
-      const s = state.slSort;
+      const s = slSortNow();
       state.slSort = s?.col === sort ? (s.dir > 0 ? { col: sort, dir: -1 } : null) : { col: sort, dir: 1 };
       return drawShortlist();
     }

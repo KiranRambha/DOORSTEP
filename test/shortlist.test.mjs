@@ -175,6 +175,57 @@ test('best in each column: ties all shade, single values and unlikely schools ne
   assert.deepEqual(best.crime, [], 'only one row has a value');
 });
 
+test('overall score: weighted, relative to the shortlist, schools judged on their own', () => {
+  const e = (id, door, price, crime, schools) => ({ id, snapshot: {
+    transport: { door: { minutes: door }, station: { walkMin: 10 } },
+    prices: { detached: { median: price + 200000 }, semi: { median: price } }, // the cheaper one counts
+    crime: { perMonth: crime }, flood: { covered: true, medHigh: 0 }, schools,
+  } });
+  const both = { primary: { likely: true }, secondary: { likely: true } };
+  const rows = [
+    e('fast', 40, 700000, 30, both), // best commute, worst price and crime
+    e('cheap', 60, 500000, 10, { primary: { likely: false }, secondary: null }), // best price and crime, weak schools
+  ];
+  const w = { door: 'high', schools: 'high', price: 'high', walk: 'medium', crime: 'medium', flood: 'low' };
+  const out = snap.scoreShortlist(rows, w);
+  // fast: door 100·3, schools 100·3, price 0·3, walk 100·2 (tie), crime 0·2, flood 100·1 (tie) = 900/14
+  assert.equal(out.fast.score, Math.round(900 / 14));
+  // cheap: door 0, schools 15·3 (30 primary fallback + 0 secondary, averaged), price 300, walk 200, crime 200, flood 100
+  assert.equal(out.cheap.score, Math.round((45 + 300 + 200 + 200 + 100) / 14));
+  assert.deepEqual(out.fast.wins, ['door', 'schools']);
+  assert.deepEqual(out.fast.losses, ['price', 'crime']);
+  assert.equal(out.fast.rank, 1);
+  assert.equal(out.cheap.rank, 2);
+});
+
+test('overall score: Off drops a factor, missing figures are left out not counted against', () => {
+  const rows = [
+    { id: 'a', snapshot: { transport: { door: { minutes: 40 } }, crime: null } },
+    { id: 'b', snapshot: { transport: { door: { minutes: 60 } }, crime: { perMonth: 5 } } },
+  ];
+  const out = snap.scoreShortlist(rows, { door: 'high', crime: 'off' });
+  assert.equal(out.a.score, 100);
+  assert.equal(out.b.score, 0);
+  const withCrime = snap.scoreShortlist(rows, { door: 'high', crime: 'high' });
+  assert.equal(withCrime.a.score, 100, 'a has no crime figure, so only its commute counts');
+  assert.deepEqual(withCrime.a.missing, ['crime']);
+  assert.equal(withCrime.b.score, 50, 'b: commute 0, crime 100 (the only crime figure)');
+  assert.deepEqual(snap.scoreShortlist(rows, { door: 'off' }), { a: { score: null, rank: null, wins: [], losses: [], missing: [] }, b: { score: null, rank: null, wins: [], losses: [], missing: [] } });
+});
+
+test('overall score: at most 2 strengths and 2 weaknesses, strongest first', () => {
+  const row = (id, v) => ({ id, snapshot: { transport: { door: { minutes: v[0] }, station: { walkMin: v[1] } }, crime: { perMonth: v[2] }, prices: { semi: { median: v[3] } } } });
+  const out = snap.scoreShortlist([row('a', [40, 5, 10, 500000]), row('b', [60, 15, 20, 600000]), row('c', [41, 6, 19, 590000])],
+    { door: 'high', walk: 'high', crime: 'high', price: 'high' });
+  assert.deepEqual(out.a.wins, ['door', 'price'], 'four wins, keep the two that matter most (factor order breaks ties)');
+  assert.deepEqual(out.c.wins, ['door', 'walk'], '95 and 90, not price at 10');
+  assert.deepEqual(out.c.losses, ['price', 'crime'], 'price 10 is worse than crime 10 only by order; both kept');
+});
+
+test('overall score: default weights match the owner\'s choice', () => {
+  assert.deepEqual(snap.DEFAULT_WEIGHTS, { door: 'high', schools: 'high', price: 'high', walk: 'medium', crime: 'medium', flood: 'low' });
+});
+
 test('faith label for the school cells', () => {
   assert.equal(snap.faithLabel({ faith: 'none' }), 'faith: no faith');
   assert.equal(snap.faithLabel({ faith: 'catholic', hideFaith: true }), 'faith: Catholic · faith schools hidden');
