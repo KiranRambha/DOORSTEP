@@ -877,7 +877,7 @@ function drawSaveButton() {
   const b = $('#save-place');
   const on = Boolean(isSaved());
   b.setAttribute('aria-pressed', String(on));
-  b.textContent = on ? '★ Saved' : '☆ Save to shortlist';
+  // Both labels stay in the button (only one visible), so it keeps the same width and doesn't jump.
   b.title = on ? 'Remove from your shortlist' : 'Save a snapshot of this place to compare later';
   $('#shortlist-link').textContent = state.shortlist.length ? `Shortlist (${state.shortlist.length})` : 'Shortlist';
 }

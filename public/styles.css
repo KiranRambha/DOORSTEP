@@ -436,6 +436,9 @@ table.schools .chip { white-space: nowrap; }
 .save, .btn { padding: 8px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-weight: 600; cursor: pointer; white-space: nowrap; }
 .save:hover, .btn:hover { border-color: var(--accent); }
 .save[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.save { display: inline-grid; justify-items: center; }
+.save > span { grid-area: 1 / 1; }
+.save[aria-pressed="true"] .save-off, .save:not([aria-pressed="true"]) .save-on { visibility: hidden; }
 .btn:disabled { opacity: .6; cursor: progress; }
 .btn.small { padding: 4px 10px; font-size: 13px; font-weight: 500; }
 .btn.icon { padding: 4px 9px; color: var(--muted); }
