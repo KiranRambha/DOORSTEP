@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { walkAllowance, priceVerdict, rankStations } from '../public/find.js';
+import { walkAllowance, priceVerdict, rankStations, retryable } from '../public/find.js';
 import { nextTuesday } from '../lib/sources.mjs';
 
 test('next Tuesday uses the local date, even just after midnight in summer time', () => {
@@ -54,6 +54,13 @@ test('price: cheap check rules out, or asks for EPC when the budget is raised', 
 test('price: a station with no sales is unknown, not a refetch loop', () => {
   const none = { allSizesMedian: null, epc: { enabled: true, ran: false, error: null }, sales: [] };
   assert.equal(priceVerdict(none, { allowanceMin: 15, budget: 800000 }).status, 'unknown');
+});
+
+test('retry: a failed lookup or EPC outage is worth retrying, a real answer is not', () => {
+  assert.equal(retryable({ error: 'postcodes.io down' }), true);
+  assert.equal(retryable({ epc: { enabled: true, ran: true, error: 'EPC down' }, sales: [] }), true);
+  assert.equal(retryable({ epc: { enabled: true, ran: true, error: null }, sales: [] }), false); // no sales is an answer
+  assert.equal(retryable(undefined), false);
 });
 
 test('price: without an EPC token, all detached and semi sales count and say so', () => {

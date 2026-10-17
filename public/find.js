@@ -50,3 +50,6 @@ export function rankStations(stations, settings) {
     .filter((s) => s.allowanceMin != null && schoolsPass(s))
     .sort((a, b) => a.trainMin - b.trainMin || a.name.localeCompare(b.name));
 }
+
+/** A price that failed for a passing reason (a lookup error or an EPC outage), worth asking for again. */
+export const retryable = (p) => Boolean(p && (p.error || p.epc?.error));

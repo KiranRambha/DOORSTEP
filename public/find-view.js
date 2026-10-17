@@ -1,9 +1,10 @@
 // Find places view: settings bar, ranked list of stations, prices filling in, and a map of matches.
 // The rules live in find.js; this file only fetches and draws.
-import { priceVerdict, rankStations, MAX_WALK } from './find.js';
+import { priceVerdict, rankStations, retryable, MAX_WALK } from './find.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const CONCURRENCY = 3;
+const MAX_TRIES = 3; // first try plus two retries for "couldn't check" prices
 const DOOR_OPTIONS = [45, 50, 55, 60, 65, 70, 75, 80, 90];
 const WALK_OPTIONS = [5, 10, 15].filter((m) => m <= MAX_WALK);
 const BUDGETS = Array.from({ length: 23 }, (_, i) => 400000 + i * 50000); // £400k to £1.5m
@@ -15,6 +16,7 @@ const S = {
   dataFaith: undefined, // faith the data was loaded with
   prices: new Map(), // station id -> /api/find/price body (or { error })
   asked: new Map(), // station id -> budget last requested
+  tries: new Map(), // station id -> price requests made
   flood: new Map(), // station id -> /api/flood body (or { error })
   active: 0,
   map: null,
@@ -104,7 +106,8 @@ function verdictFor(st, set = settings()) {
 function nextJob() {
   if (!S.data?.ready) return null;
   const set = settings();
-  for (const st of rankStations(S.data.stations, set)) {
+  const ranked = rankStations(S.data.stations, set);
+  for (const st of ranked) {
     const p = S.prices.get(st.id);
     const asked = S.asked.get(st.id);
     if (asked === 'busy') continue;
@@ -112,6 +115,10 @@ function nextJob() {
     // Budget raised past a station the cheap check ruled out: ask again so room counts are checked.
     if (priceVerdict(p, { allowanceMin: st.allowanceMin, budget: set.budget }).status === 'needs-epc' && asked !== set.budget) return { kind: 'price', st };
     if (verdictFor(st, set).status === 'pass' && !S.flood.has(st.id)) return { kind: 'flood', st };
+  }
+  // Only once everything else is done (less load): retry prices that failed for a passing reason.
+  for (const st of ranked) {
+    if (S.asked.get(st.id) !== 'busy' && retryable(S.prices.get(st.id)) && (S.tries.get(st.id) || 0) < MAX_TRIES) return { kind: 'price', st };
   }
   return null;
 }
@@ -135,6 +142,7 @@ async function run({ kind, st }) {
   }
   const budget = settings().budget;
   S.asked.set(st.id, 'busy');
+  S.tries.set(st.id, (S.tries.get(st.id) || 0) + 1);
   const body = await d.api(`/api/find/price?id=${encodeURIComponent(st.id)}&budget=${budget}`).catch((e) => ({ error: e.message }));
   S.prices.set(st.id, body);
   S.asked.set(st.id, budget);
