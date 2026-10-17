@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { walkAllowance, priceVerdict, rankStations, retryable, pageOf } from '../public/find.js';
+import { walkAllowance, priceVerdict, rankStations, retryable, pageOf, inLondonZones, AREAS } from '../public/find.js';
 import { nextTuesday } from '../lib/sources.mjs';
 
 test('next Tuesday uses the local date, even just after midnight in summer time', () => {
@@ -100,6 +100,27 @@ test('ranking: the schools setting can ask for Outstanding primary, secondary or
   assert.deepEqual(names('both'), ['OO']);
 });
 
+test('zones: Greater London stations count if any zone is 3 to 6', () => {
+  assert.equal(inLondonZones('4'), true);
+  assert.equal(inLondonZones('2+3'), true);
+  assert.equal(inLondonZones('2/3'), true);
+  assert.equal(inLondonZones('6+7'), true);
+  assert.equal(inLondonZones('1+2'), false);
+  assert.equal(inLondonZones('2'), false);
+  assert.equal(inLondonZones('7'), false);
+  assert.equal(inLondonZones(undefined), false);
+});
+
+test('ranking: the area setting picks outside London, London or both', () => {
+  const st = (name, london) => ({ name, trainMin: 30, london, primary: {}, secondary: {} });
+  const all = [st('Out', false), st('Old', undefined), st('In', true)];
+  const names = (area) => rankStations(all, { maxDoor: 60, maxWalk: 15, area }).map((x) => x.name).sort();
+  assert.deepEqual(Object.keys(AREAS), ['outside', 'london', 'both']);
+  assert.deepEqual(names(undefined), ['Old', 'Out'], 'default is outside London (old files have no london flag)');
+  assert.deepEqual(names('london'), ['In']);
+  assert.deepEqual(names('both'), ['In', 'Old', 'Out']);
+});
+
 test('pages: 20 a page, page number kept in range', () => {
   const items = Array.from({ length: 45 }, (_, i) => i);
   assert.deepEqual(pageOf(items, 1), { items: items.slice(0, 20), page: 1, pages: 3, start: 0 });
@@ -127,6 +148,7 @@ function tempProject(files = {}) {
   return tmp;
 }
 
+const stopZone = (id, zone) => ({ naptanId: id, additionalProperties: zone ? [{ key: 'Zone', value: zone }] : [] });
 const json = (body, status = 200) => ({ ok: status < 400, status, json: async () => body, text: async () => JSON.stringify(body) });
 
 const NAPTAN = [
@@ -139,7 +161,7 @@ const NAPTAN = [
   '9100OLDSTN,Old Station Rail Station,-0.3,51.7,RLY,inactive',
 ].join('\n');
 
-test('station setup: outside London only, fastest terminus, resume uses the cache', async () => {
+test('station setup: Clapham (zone 2) left out, fastest terminus, resume uses the cache', async () => {
   const tmp = tempProject();
   let tflCalls = 0;
   let inFlight = 0;
@@ -154,6 +176,8 @@ test('station setup: outside London only, fastest terminus, resume uses the cach
         return { query: g, result: [{ postcode: london ? 'SW11 2QP' : g.latitude > 51.85 ? 'SG4 0AA' : 'AL5 4FQ', region: london ? 'London' : 'East of England', country: 'England' }] };
       }) });
     }
+    if (u.includes('api.tfl.gov.uk/StopPoint/Mode/')) return json({ stopPoints: [] });
+    if (u.includes('api.tfl.gov.uk/StopPoint/910GCLPHMJN')) return json(stopZone('910GCLPHMJN', '2'));
     if (u.includes('api.tfl.gov.uk/Journey')) {
       tflCalls++;
       inFlight++; maxInFlight = Math.max(maxInFlight, inFlight);
@@ -190,6 +214,72 @@ test('station setup: outside London only, fastest terminus, resume uses the cach
   tflCalls = 0;
   await buildStations({ log: () => {}, gapMs: 0 });
   assert.equal(tflCalls, 16); // Harpenden cached; Nowhere's failures retried
+});
+
+test('station setup: Greater London zones 3-6, Tube-only stations outside London, zones saved', async () => {
+  const tmp = tempProject();
+  const naptan = [
+    'ATCOCode,CommonName,Longitude,Latitude,StopType,Status',
+    '9100HRPNDN,Harpenden Rail Station,-0.35148,51.81464,RLY,active',
+    '9100BXLYHTH,Bexleyheath Rail Station,0.1337,51.4635,RLY,active', // London, zone 5
+    '9100CLPHMJN,Clapham Junction Rail Station,-0.1703,51.4642,RLY,active', // London, zone 2
+    '9100MYSTERY,Mystery Rail Station,-0.2,51.45,RLY,active', // London, TfL has no zone
+  ].join('\n');
+  const metro = (id, name, lat, lon, zone) => ({ naptanId: id, stopType: 'NaptanMetroStation', commonName: name, lat, lon,
+    additionalProperties: [{ key: 'Zone', value: zone }] });
+  const tube = [
+    metro('940GZZLUEPG', 'Epping Underground Station', 51.6937, 0.1139, '6'), // Tube-only, outside Greater London
+    metro('940GZZLUBKG', 'Barking Underground Station', 51.4392, 0.0810, '4'), // London, zone 4
+    metro('940GZZLUBST', 'Baker Street Underground Station', 51.4229, -0.1570, '1'), // London, zone 1
+    { naptanId: '940GZZLUEPG1', stopType: 'NaptanMetroPlatform', commonName: 'Epping', lat: 51.69, lon: 0.11 }, // not a station
+  ];
+  const zones = { '910GBXLYHTH': '5', '910GCLPHMJN': '2', '910GMYSTERY': null };
+  const journeys = [];
+  globalThis.fetch = async (url, opts = {}) => {
+    const u = String(url);
+    if (u.includes('naptan.api.dft.gov.uk')) return { ok: true, status: 200, text: async () => naptan };
+    if (u === 'https://api.postcodes.io/postcodes' && opts.method === 'POST') {
+      const { geolocations } = JSON.parse(opts.body);
+      return json({ status: 200, result: geolocations.map((g) => {
+        const london = g.latitude < 51.5;
+        return { query: g, result: [{ postcode: london ? 'DA6 7AA' : 'AL5 4FQ', region: london ? 'London' : 'East of England', country: 'England' }] };
+      }) });
+    }
+    if (u.includes('api.tfl.gov.uk/StopPoint/Mode/tube')) return json({ stopPoints: tube });
+    if (u.includes('api.tfl.gov.uk/StopPoint/Mode/dlr')) return json({ stopPoints: [] });
+    const zm = u.match(/api\.tfl\.gov\.uk\/StopPoint\/(910G[A-Z]+)\?/);
+    if (zm) return zones[zm[1]] === undefined ? json({}, 404) : json(stopZone(zm[1], zones[zm[1]]));
+    if (u.includes('api.tfl.gov.uk/Journey')) {
+      journeys.push(u);
+      return json({ journeys: [{ duration: 40, legs: [
+        { mode: { name: 'tube' }, duration: 30, departureTime: '2026-10-20T08:20:00', arrivalTime: '2026-10-20T08:50:00', routeOptions: [{ name: 'Central' }] },
+      ] }] });
+    }
+    throw new Error('Unexpected URL in test: ' + u);
+  };
+  const { buildStations } = await import(path.join(tmp, 'lib', 'stations.mjs'));
+  const lines = [];
+  const out = await buildStations({ log: (m) => lines.push(m), gapMs: 0 });
+  const by = Object.fromEntries(out.stations.map((s) => [s.name, s]));
+  assert.deepEqual(Object.keys(by).sort(), ['Barking', 'Bexleyheath', 'Epping', 'Harpenden']);
+  assert.deepEqual([by.Bexleyheath.london, by.Bexleyheath.zone], [true, '5']);
+  assert.deepEqual([by.Barking.london, by.Barking.zone], [true, '4']);
+  assert.deepEqual([by.Epping.london, by.Epping.zone], [false, '6'], 'Tube-only station outside Greater London');
+  assert.deepEqual([by.Harpenden.london, by.Harpenden.zone], [false, null]);
+  assert.ok(journeys.some((u) => u.includes('/JourneyResults/940GZZLUEPG/to/')), 'Tube stations planned by their TfL id');
+  assert.ok(lines.some((l) => /1 London station.* no zone/.test(l)), lines.join('\n'));
+});
+
+test('station setup: a failed Tube list stops setup instead of saving a half-built list', async () => {
+  const tmp = tempProject();
+  globalThis.fetch = async (url, opts = {}) => {
+    const u = String(url);
+    if (u.includes('naptan.api.dft.gov.uk')) return { ok: true, status: 200, text: async () => 'ATCOCode,CommonName,Longitude,Latitude,StopType,Status' };
+    if (u.includes('api.tfl.gov.uk/StopPoint/Mode/')) return json({ message: 'bad' }, 400);
+    throw new Error('Unexpected URL in test: ' + u);
+  };
+  const { buildStations } = await import(path.join(tmp, 'lib', 'stations.mjs'));
+  await assert.rejects(buildStations({ log: () => {}, gapMs: 0 }), /Tube/);
 });
 
 /* ───────── /api/find: stations plus their best likely Good+ schools ───────── */
@@ -246,12 +336,13 @@ function priceMocks(flags) {
       return json({ results: { bindings } });
     }
     if (u.includes('landregistry.data.gov.uk')) {
-      const b = (paon, pc, amount) => ({ tx: { value: `tx-${paon}` }, amount: { value: String(amount) }, date: { value: '2026-05-01' },
-        type: { value: 'http://landregistry.data.gov.uk/def/common/detached' }, paon: { value: paon }, street: { value: 'HIGH STREET' },
+      const b = (paon, pc, amount, type = 'detached') => ({ tx: { value: `tx-${paon}` }, amount: { value: String(amount) }, date: { value: '2026-05-01' },
+        type: { value: `http://landregistry.data.gov.uk/def/common/${type}` }, paon: { value: paon }, street: { value: 'HIGH STREET' },
         pc: { value: pc }, category: { value: 'http://landregistry.data.gov.uk/def/ppi/standardPricePaidTransaction' } });
       return json({ results: { bindings: [
         b('1', 'AL5 1AA', 600000), b('2', 'AL5 1AA', 650000), b('3', 'AL5 1AA', 700000),
         b('4', 'AL5 1AA', 750000), b('5', 'AL5 1AA', 800000), b('6', 'AL5 2BB', 900000),
+        b('7', 'AL5 1AA', 500000, 'terraced'), b('8', 'AL5 1AA', 400000, 'flat-maisonette'),
       ] } });
     }
     if (u.includes('get-energy-performance-data')) {
@@ -284,6 +375,20 @@ test('station price: distances attached, EPC skipped when everything is over bud
   assert.equal(r.sales.length, 6);
   assert.ok(r.sales.every((s) => Number.isFinite(s.distance)));
   assert.ok(r.sales.find((s) => s.price === 900000).distance > 600);
+});
+
+test('station price: terraced houses count in Greater London only', async () => {
+  delete process.env.EPC_TOKEN;
+  priceMocks({ epcCalls: 0 });
+  const LONDON = { ...HARPENDEN, id: '9100BXLYHTH', name: 'Bexleyheath', london: true, zone: '5' };
+  const tmp = tempProject({ 'stations.json': { ...STATIONS_FILE, stations: [HARPENDEN, LONDON] } });
+  const { stationPrice } = await import(path.join(tmp, 'lib', 'stations.mjs'));
+  const out = await stationPrice('9100HRPNDN', 900000);
+  assert.deepEqual(out.sales.map((s) => s.type).sort(), Array(6).fill('Detached'));
+  const lon = await stationPrice('9100BXLYHTH', 900000);
+  assert.equal(lon.sales.length, 7, 'plus the terraced house, never the flat');
+  assert.ok(lon.sales.some((s) => s.type === 'Terraced'));
+  assert.equal(lon.terraced, true);
 });
 
 test('station price: EPC runs when the budget could pass, and an outage is flagged not cached', async () => {

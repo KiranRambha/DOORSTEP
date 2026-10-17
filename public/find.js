@@ -39,6 +39,24 @@ export function schoolsPass(station, level = 'good') {
   return true;
 }
 
+/** The Area setting. "Outside London" means outside Greater London, so it includes zones 7-9. */
+export const AREAS = {
+  outside: 'Outside London',
+  london: 'London zones 3–6',
+  both: 'Both',
+};
+
+export function areaPass(station, area = 'outside') {
+  if (area === 'both') return true;
+  return area === 'london' ? Boolean(station.london) : !station.london;
+}
+
+/** A TfL zone ("4", "2+3", "2/3", "6+7") is in range if any of its zones is 3 to 6. Zones 1-2 are left
+ *  out because 4-bed houses there are almost always over the top budget. */
+export function inLondonZones(zone) {
+  return String(zone ?? '').split(/[+/]/).map(Number).some((z) => z >= 3 && z <= 6);
+}
+
 export const PAGE_SIZE = 20;
 
 /** One page of a list, with the page number kept in range. */
@@ -78,7 +96,7 @@ export function priceVerdict(p, { allowanceMin, budget, beds = DEFAULT_BEDS }) {
 export function rankStations(stations, settings) {
   return stations
     .map((s) => ({ ...s, allowanceMin: walkAllowance(s.trainMin, settings) }))
-    .filter((s) => s.allowanceMin != null && schoolsPass(s, settings.schools))
+    .filter((s) => s.allowanceMin != null && areaPass(s, settings.area) && schoolsPass(s, settings.schools))
     .sort((a, b) => a.trainMin - b.trainMin || a.name.localeCompare(b.name));
 }
 

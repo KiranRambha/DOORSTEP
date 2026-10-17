@@ -497,6 +497,8 @@ table.sl td.best .chip.in, table.sl td.best .chip.likely, table.sl td.best .chip
 .fp-num.muted { background: var(--line); color: var(--muted); }
 .fp-main { min-width: 0; }
 .fp-main h3 { font-size: 18px; line-height: 1.2; }
+.fp-zone { display: inline-block; vertical-align: 2px; margin-left: 4px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-family: var(--body); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.fp-london-note { margin: 0 0 10px; }
 .fp-commute { margin: 2px 0 8px; font-size: 14px; }
 .fp-commute small, .fp-price small, .fp-school small, .fp-unknown small { display: block; color: var(--muted); font-size: 12px; }
 .fp-schools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }

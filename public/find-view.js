@@ -1,6 +1,6 @@
 // Find places view: settings bar, ranked list of stations, prices filling in, and a map of matches.
 // The rules live in find.js; this file only fetches and draws.
-import { priceVerdict, rankStations, retryable, pageOf, MAX_WALK, SCHOOL_LEVELS, BEDS, DEFAULT_BEDS } from './find.js';
+import { priceVerdict, rankStations, retryable, pageOf, MAX_WALK, SCHOOL_LEVELS, BEDS, DEFAULT_BEDS, AREAS } from './find.js';
 import { friendlyError } from './errors.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -32,6 +32,7 @@ const settings = () => ({
   budget: Number($('#fp-budget').value),
   schools: $('#fp-schools').value,
   beds: Number($('#fp-beds').value),
+  area: $('#fp-area').value,
   faith: $('#fp-faith').value,
 });
 
@@ -46,12 +47,13 @@ export function initFind(deps) {
   fill($('#fp-door'), DOOR_OPTIONS, (v) => `${v} min or less`, d.store.get('doorstep.find.maxDoor'), 60);
   fill($('#fp-walk'), WALK_OPTIONS, (v) => `up to ${v} min`, d.store.get('doorstep.find.maxWalk'), 15);
   fill($('#fp-budget'), BUDGETS, (v) => `up to ${d.gbpShort(v)}`, d.store.get('doorstep.find.budget'), 800000);
+  fill($('#fp-area'), Object.keys(AREAS), (v) => AREAS[v], d.store.get('doorstep.find.area'), 'outside');
   fill($('#fp-beds'), BEDS, (v) => `${v}+ bedrooms`, d.store.get('doorstep.find.beds'), DEFAULT_BEDS);
   fill($('#fp-schools'), Object.keys(SCHOOL_LEVELS), (v) => SCHOOL_LEVELS[v], d.store.get('doorstep.find.schools'), 'good');
   $('#fp-faith').innerHTML = $('#school-faith').innerHTML; // same options as the Schools panel
   $('#fp-faith').value = d.store.get('doorstep.faith') || '';
 
-  for (const [id, key] of [['#fp-door', 'maxDoor'], ['#fp-walk', 'maxWalk'], ['#fp-budget', 'budget'], ['#fp-beds', 'beds'], ['#fp-schools', 'schools']]) {
+  for (const [id, key] of [['#fp-door', 'maxDoor'], ['#fp-walk', 'maxWalk'], ['#fp-budget', 'budget'], ['#fp-beds', 'beds'], ['#fp-schools', 'schools'], ['#fp-area', 'area']]) {
     $(id).addEventListener('change', () => { d.store.set(`doorstep.find.${key}`, $(id).value); S.page = 1; draw(); pump(); });
   }
   $('#fp-pager').addEventListener('click', (e) => {
@@ -183,12 +185,12 @@ function rowHtml(st, n, v, beds) {
   const name = d.esc(d.destName(st.terminus));
   const change = st.changes ? `${st.changes} change${st.changes === 1 ? '' : 's'}${st.changeAt?.length ? ` at ${d.esc(st.changeAt.join(', '))}` : ''}` : 'direct';
   const price = v.status === 'pass'
-    ? `<div class="fp-price"><span class="main num">${d.gbpShort(v.median)}</span><small>typical ${v.allSizes ? 'detached or semi (all sizes)' : `${beds}+ bed`} · from ${v.count} sales</small></div>`
+    ? `<div class="fp-price"><span class="main num">${d.gbpShort(v.median)}</span><small>typical ${v.allSizes ? (st.london ? 'detached, semi or terraced (all sizes)' : 'detached or semi (all sizes)') : `${beds}+ bed${st.london ? ', incl. terraced' : ''}`} · from ${v.count} sales</small></div>`
     : '<div class="fp-price"><span class="loading">checking price…</span></div>';
   return `<li class="fp-row${v.status === 'pass' ? '' : ' pending'}" data-id="${d.esc(st.id)}" tabindex="0" role="button" aria-label="Open ${d.esc(st.name)}">
     ${v.status === 'pass' ? `<span class="fp-num">${n}</span>` : '<span class="fp-num muted">·</span>'}
     <div class="fp-main">
-      <h3>${d.esc(st.name)}</h3>
+      <h3>${d.esc(st.name)}${st.zone ? ` <span class="fp-zone">Zone ${d.esc(st.zone.replace('/', '+'))}</span>` : ''}</h3>
       <p class="fp-commute"><span class="num">${st.trainMin} min</span> to ${name} · ${change}<small>walk up to ${st.allowanceMin} min (${d.dist(st.allowanceMin * 80)})</small></p>
       <div class="fp-schools">${schoolHtml(st.primary, 'Primary')}${schoolHtml(st.secondary, 'Secondary')}</div>
     </div>
@@ -217,9 +219,12 @@ function draw() {
     : `<strong>${pass.length} ${pass.length === 1 ? 'place matches' : 'places match'}</strong> <span class="muted">· ${ranked.length} stations checked${overText}</span>`;
 
   const epcDown = unknown.filter((r) => /energy certificate/.test(r.v.reason)).length;
-  $('#fp-banner').innerHTML = epcDown && epcDown >= checked / 2
+  $('#fp-banner').innerHTML = (epcDown && epcDown >= checked / 2
     ? '<p class="sl-warn">The energy certificate service isn\'t responding, so room counts can\'t be checked. Try again later.</p>'
-    : '';
+    : '')
+    + (set.area !== 'outside'
+      ? '<p class="note fp-london-note">London school places often go by a few hundred metres: check the council\'s last distance offered before relying on “likely”.</p>'
+      : '');
 
   // Matches first (numbered), then stations still being checked; 20 a page.
   const rows = [...pass.map((r, i) => ({ ...r, n: i + 1 })), ...pending.map((r) => ({ ...r, n: 0 }))];
