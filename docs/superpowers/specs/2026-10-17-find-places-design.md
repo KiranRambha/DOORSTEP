@@ -81,6 +81,34 @@ This is the slow part (the owner was told 20–40 minutes and accepted that). Re
 - **Schools** setting: Good or Outstanding (default), Outstanding primary, Outstanding secondary, or both.
 - **Pages of 20**; the map shows only the current page's pins.
 
+### London zones 3–6 (agreed with the owner on 17 Oct 2026)
+
+**Why:** outer London (for example Bexley, Havering, Sutton, Bromley) may have 4-bed houses under the budget. This reverses the earlier "outside London only" choice for **zones 3–6**. Zones 1–2 stay out: 4-bed houses there are almost always over £1.5m, so they'd only slow the search.
+
+**Which stations:**
+- Tube and DLR stations from TfL's station list per mode (`StopPoint/Mode/tube`, `/dlr`), which includes each station's zone.
+- National Rail, Overground and Elizabeth line stations in Greater London from NaPTAN (already downloaded). Their zone comes from TfL `StopPoint/{id}`, one call per station, cached.
+- Keep a station if **any** of its zones is 3, 4, 5 or 6. "2+3" counts; "1+2" doesn't. Stations with no zone from TfL are left out, and setup logs how many.
+- Trams are left out.
+- Each London station is saved with `london: true` and its `zone`, for example "4" or "2+3".
+
+**Commute:** unchanged. Walk plus the fastest trip to any of the 16 central termini, planned station to station by TfL id. The Tube counts, for example the Northern line to London Bridge.
+
+**Price:** in London, **terraced houses count too**, because most London 4-beds are terraced. So in London it's detached, semi and terraced. Outside London it stays detached and semi. Rooms, budget and bedrooms rules are the same everywhere. Rows say which house types were counted.
+
+**Schools:** the same rule. London catchments are often much tighter than the estimate's distance bands, so when London is shown, the page adds a note: "London school places often go by a few hundred metres: check the council's last distance offered before relying on 'likely'."
+
+**Page:**
+- A new **Area** dropdown: Outside London (default), London zones 3–6, or Both. It's remembered like the other settings and re-filters instantly.
+- London rows show their zone, for example "Zone 4", next to the station name.
+- Flood and click-through are unchanged.
+
+**Setup:**
+- `npm run setup:stations` builds both lists. A re-run before Tuesday 20 Oct reuses the journeys already planned for stations outside London. The London part adds about 300–400 stations (about 5,000–6,500 TfL calls at the existing pace, roughly 15–25 minutes).
+- If the Tube or DLR list can't be downloaded, setup stops with a clear message rather than saving a half-built London list.
+
+**Left out on purpose:** zone 1–2 stations, trams, and London-specific catchment bands. Better London catchment data would need council figures; that's a separate idea.
+
 ## Goals, non-goals, anti-goals
 
 **Goals:** a list of stations meeting all the rules in seconds; prices filling in live; settings changes feel instant; click through to the full view.
