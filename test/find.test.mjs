@@ -3,6 +3,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { walkAllowance, priceVerdict, rankStations } from '../public/find.js';
+import { nextTuesday } from '../lib/sources.mjs';
+
+test('next Tuesday uses the local date, even just after midnight in summer time', () => {
+  assert.equal(nextTuesday(new Date(2026, 9, 17, 0, 58)), '20261020'); // Sat 17 Oct, 00:58
+  assert.equal(nextTuesday(new Date(2026, 9, 20, 12, 0)), '20261027'); // on a Tuesday: the next one
+});
 
 /* ───────── Pure rules ───────── */
 
@@ -103,9 +109,15 @@ test('station setup: outside London only, fastest terminus, resume uses the cach
     }
     if (u.includes('api.tfl.gov.uk/Journey')) {
       tflCalls++;
-      if (u.includes('/51.9,')) return json({ journeys: [] });
-      return json({ journeys: [{ duration: 27, startDateTime: '2026-10-20T08:33:00', arrivalDateTime: '2026-10-20T09:00:00', legs: [
-        { mode: { name: 'national-rail' }, duration: 27, instruction: { summary: 'Thameslink' }, routeOptions: [{ name: 'Thameslink' }] },
+      // Station to station by TfL code: coordinates far from London get "No journey found".
+      assert.match(u, /JourneyResults\/910G[A-Z]+\/to\/910G[A-Z]+\?/);
+      if (u.includes('/910GNOWHERE/')) return json({ message: 'No journey found for your inputs.' }, 404);
+      // TfL's duration counts walks at both ends; only the train time (08:25 to 08:52) should count.
+      const fast = u.includes('/to/910GSTPXBOX');
+      return json({ journeys: [{ duration: fast ? 42 : 60, startDateTime: '2026-10-20T08:17:00', arrivalDateTime: '2026-10-20T08:59:00', legs: [
+        { mode: { name: 'walking' }, duration: 8, departureTime: '2026-10-20T08:17:00', arrivalTime: '2026-10-20T08:25:00', instruction: { summary: 'Walk' } },
+        { mode: { name: 'national-rail' }, duration: fast ? 27 : 45, departureTime: '2026-10-20T08:25:00', arrivalTime: fast ? '2026-10-20T08:52:00' : '2026-10-20T09:10:00', instruction: { summary: 'Thameslink' }, routeOptions: [{ name: 'Thameslink' }] },
+        { mode: { name: 'walking' }, duration: 7, departureTime: '2026-10-20T08:52:00', arrivalTime: '2026-10-20T08:59:00', instruction: { summary: 'Walk' } },
       ] }] });
     }
     throw new Error('Unexpected URL in test: ' + u);
@@ -115,15 +127,15 @@ test('station setup: outside London only, fastest terminus, resume uses the cach
   const out = await buildStations({ log: () => {} });
   assert.deepEqual(out.stations.map((s) => s.name), ['Harpenden']);
   const h = out.stations[0];
-  assert.equal(h.trainMin, 27);
+  assert.equal(h.trainMin, 27); // the train only, not TfL's 42 with walks
+  assert.equal(h.terminus, 'stpancras'); // the fastest of every terminus, wherever it is
   assert.equal(h.postcode, 'AL5 4FQ');
-  assert.ok(TERMINI.includes(h.terminus));
   assert.equal(TERMINI.length, 16);
   assert.equal(out.failed, 1); // Nowhere: no journey
-  assert.equal(tflCalls, 6); // 3 termini each for Harpenden and Nowhere
+  assert.equal(tflCalls, 32); // every terminus for Harpenden and Nowhere
   tflCalls = 0;
   await buildStations({ log: () => {} });
-  assert.equal(tflCalls, 3); // Harpenden cached; Nowhere's empty result retried
+  assert.equal(tflCalls, 16); // Harpenden cached; Nowhere's failures retried
 });
 
 /* ───────── /api/find: stations plus their best likely Good+ schools ───────── */
