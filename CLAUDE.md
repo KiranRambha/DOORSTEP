@@ -124,6 +124,7 @@ npm test        # node:test, fully offline, every API mocked
 - Changing door-to-door, walk or budget only re-filters in the browser; prices are fetched once per station (sales carry their distance). Concurrency 3, fastest train first, and only while the Find view is open. A price lookup fails outright if any postcode sample fails (`dense: true`), so a partial sample is never cached. Flood is fetched for passing stations only. Crime isn't on rows (too many calls); it's in the normal view after click-through.
 - **Schools setting** (`SCHOOL_LEVELS` in `public/find.js`, saved as `doorstep.find.schools`): Good or Outstanding (default), Outstanding primary, Outstanding secondary, or both. Each station's school per phase is already the best likely one, Outstanding first, so the filter just checks its tone. The owner chose these 4 options.
 - **Pages of 20** (`pageOf`): matches first (numbered across pages), then stations still being checked. The map shows only the current page's pins, so list and map numbers always match. Changing a setting goes back to page 1.
+- **Shortlisted stations** are highlighted (amber border, "★ Shortlisted · <place>", ringed map pin) when a saved place is within 1.2 km of the station (`shortlistedNear`). Saved places' own lat/lng are used, so this works for postcodes and towns.
 - Clicking a row opens the station's nearest postcode with the commute dropdown set to that station's terminus.
 
 ## UI conventions and the owner's preferences

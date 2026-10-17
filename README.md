@@ -35,6 +35,7 @@ Open **Find places** in the top bar to search the other way round: instead of ch
 - **Area** (Outside London including zones 7–9, Greater London zones 3–6, or both), **Door to door** (45 to 90 min), **Walk to the station** (5 to 15 min), **Budget** (£400k to £1.5m), **Bedrooms** (3+, 4+ or 5+), **Schools** (Good or Outstanding, Outstanding primary, Outstanding secondary, or both) and **Your faith**.
 - Each match shows the train time and changes, the best primary and secondary you'd likely get into, the typical price for your bedroom count, and flood risk. Click one to open the full view for that area.
 - In London, terraced houses count in the price too, since most London 4-beds are terraced. London school catchments are often tighter than the app's estimate, so check the council's figures.
+- Stations near a place on your shortlist are marked **★ Shortlisted**, in the list and on the map.
 - Results come 20 to a page; the map shows the pins for the current page.
 - Prices fill in as you watch, and the first search takes a few minutes. Bedroom counts are estimated from energy certificates for the 80 most recent sales near each station, so they need the EPC token below.
 

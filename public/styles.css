@@ -520,6 +520,9 @@ table.sl td.best .chip.in, table.sl td.best .chip.likely, table.sl td.best .chip
 .fp-map-col { position: sticky; top: 84px; }
 #find-map { isolation: isolate; height: calc(100vh - 150px); min-height: 420px; max-height: 900px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); }
 .fp-pin { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); border: 2px solid var(--surface); box-shadow: 0 1px 4px rgb(0 0 0 / .35); display: grid; place-items: center; font: 700 12px/1 var(--body); }
+.fp-pin.saved { box-shadow: 0 0 0 3px var(--mixed), 0 1px 4px rgb(0 0 0 / .35); }
+.fp-row.saved { border-color: color-mix(in srgb, var(--mixed) 60%, var(--line)); background: color-mix(in srgb, var(--mixed) 7%, var(--surface)); }
+.fp-saved { display: inline-block; margin: 2px 0 2px; font-size: 12px; font-weight: 600; color: var(--mixed); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .fp-pin.hot { background: var(--ink); color: var(--surface); transform: scale(1.2); }
 @media (max-width: 900px) {
   .fp-layout { grid-template-columns: 1fr; }

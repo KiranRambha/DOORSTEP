@@ -1345,6 +1345,7 @@ async function boot() {
   $('#save-place').addEventListener('click', toggleSave);
   initFind({
     api, esc, gbpShort, dist, store, openPlace,
+    shortlist: () => state.shortlist || [],
     destName: (key) => (state.config.destinations.find((x) => x.key === key)?.name || key).split(' (')[0],
   });
   $('#find-link').addEventListener('click', (e) => {

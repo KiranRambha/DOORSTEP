@@ -1,6 +1,6 @@
 // Find places view: settings bar, ranked list of stations, prices filling in, and a map of matches.
 // The rules live in find.js; this file only fetches and draws.
-import { priceVerdict, rankStations, retryable, pageOf, MAX_WALK, SCHOOL_LEVELS, BEDS, DEFAULT_BEDS, AREAS } from './find.js';
+import { priceVerdict, rankStations, retryable, pageOf, MAX_WALK, SCHOOL_LEVELS, BEDS, DEFAULT_BEDS, AREAS, shortlistedNear } from './find.js';
 import { friendlyError } from './errors.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -11,7 +11,7 @@ const WALK_OPTIONS = [5, 10, 15].filter((m) => m <= MAX_WALK);
 const BUDGETS = Array.from({ length: 23 }, (_, i) => 400000 + i * 50000); // £400k to £1.5m
 const TONE_WORD = { great: 'Outstanding', good: 'Good' };
 
-let d; // { api, esc, gbpShort, dist, destName, openPlace, store }
+let d; // { api, esc, gbpShort, dist, destName, openPlace, store, shortlist }
 const S = {
   data: null, // /api/find body
   dataFaith: undefined, // faith the data was loaded with
@@ -181,16 +181,25 @@ function floodHtml(id) {
   return `<span class="chip flood-${d.esc(f.verdict)}" title="Flood risk from rivers and the sea within about 1 km">${d.esc(f.label)}</span>`;
 }
 
+/** "★ Shortlisted · AL5 4FQ" when a saved place is within walking range of the station. */
+function savedHtml(saved) {
+  if (!saved.length) return '';
+  const names = saved.slice(0, 2).map((e) => d.esc(e.label)).join(', ') + (saved.length > 2 ? ` +${saved.length - 2}` : '');
+  return `<span class="fp-saved" title="On your shortlist">★ Shortlisted · ${names}</span>`;
+}
+
 function rowHtml(st, n, v, beds) {
+  const saved = shortlistedNear(st, d.shortlist());
   const name = d.esc(d.destName(st.terminus));
   const change = st.changes ? `${st.changes} change${st.changes === 1 ? '' : 's'}${st.changeAt?.length ? ` at ${d.esc(st.changeAt.join(', '))}` : ''}` : 'direct';
   const price = v.status === 'pass'
     ? `<div class="fp-price"><span class="main num">${d.gbpShort(v.median)}</span><small>typical ${v.allSizes ? (st.london ? 'detached, semi or terraced (all sizes)' : 'detached or semi (all sizes)') : `${beds}+ bed${st.london ? ', incl. terraced' : ''}`} · from ${v.count} sales</small></div>`
     : '<div class="fp-price"><span class="loading">checking price…</span></div>';
-  return `<li class="fp-row${v.status === 'pass' ? '' : ' pending'}" data-id="${d.esc(st.id)}" tabindex="0" role="button" aria-label="Open ${d.esc(st.name)}">
+  return `<li class="fp-row${v.status === 'pass' ? '' : ' pending'}${saved.length ? ' saved' : ''}" data-id="${d.esc(st.id)}" tabindex="0" role="button" aria-label="Open ${d.esc(st.name)}">
     ${v.status === 'pass' ? `<span class="fp-num">${n}</span>` : '<span class="fp-num muted">·</span>'}
     <div class="fp-main">
       <h3>${d.esc(st.name)}${st.zone ? ` <span class="fp-zone">Zone ${d.esc(st.zone.replace('/', '+'))}</span>` : ''}</h3>
+      ${savedHtml(saved)}
       <p class="fp-commute"><span class="num">${st.trainMin} min</span> to ${name} · ${change}<small>walk up to ${st.allowanceMin} min (${d.dist(st.allowanceMin * 80)})</small></p>
       <div class="fp-schools">${schoolHtml(st.primary, 'Primary')}${schoolHtml(st.secondary, 'Secondary')}</div>
     </div>
@@ -237,7 +246,7 @@ function draw() {
   const un = $('#fp-unknown');
   un.hidden = !unknown.length;
   $('summary', un).textContent = `Couldn't check the price (${unknown.length})`;
-  $('ul', un).innerHTML = unknown.map(({ st, v }) => `<li><a href="#" data-id="${d.esc(st.id)}">${d.esc(st.name)}</a> <small>${d.esc(v.reason)}</small></li>`).join('');
+  $('ul', un).innerHTML = unknown.map(({ st, v }) => `<li><a href="#" data-id="${d.esc(st.id)}">${d.esc(st.name)}</a>${shortlistedNear(st, d.shortlist()).length ? ' <span class="fp-saved">★ Shortlisted</span>' : ''} <small>${d.esc(v.reason)}</small></li>`).join('');
 
   $('#fp-dates').textContent = `Train times as at ${dateOf(S.data.builtAt)} (planned for ${journeyDay(S.data.journeyDate)}, arriving 09:00)`
     + `${S.data.schoolsAsOf ? ` · Ofsted results as at ${dateOf(S.data.schoolsAsOf)}` : ''} · Sales from the last 3 years`;
@@ -271,7 +280,7 @@ function drawPins(pass, ranked) {
   if (!S.map) return;
   S.pins.clearLayers();
   pass.forEach(({ st, n }) => {
-    const icon = L.divIcon({ className: '', html: `<span class="fp-pin" data-pin="${d.esc(st.id)}">${n}</span>`, iconSize: [26, 26], iconAnchor: [13, 13] });
+    const icon = L.divIcon({ className: '', html: `<span class="fp-pin${shortlistedNear(st, d.shortlist()).length ? ' saved' : ''}" data-pin="${d.esc(st.id)}">${n}</span>`, iconSize: [26, 26], iconAnchor: [13, 13] });
     L.marker([st.lat, st.lng], { icon, title: st.name })
       .on('mouseover', () => hot(st.id))
       .on('mouseout', () => hot(null))

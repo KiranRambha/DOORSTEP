@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { walkAllowance, priceVerdict, rankStations, retryable, pageOf, inLondonZones, AREAS } from '../public/find.js';
+import { walkAllowance, priceVerdict, rankStations, retryable, pageOf, inLondonZones, AREAS, shortlistedNear } from '../public/find.js';
 import { nextTuesday } from '../lib/sources.mjs';
 
 test('next Tuesday uses the local date, even just after midnight in summer time', () => {
@@ -119,6 +119,19 @@ test('ranking: the area setting picks outside London, London or both', () => {
   assert.deepEqual(names(undefined), ['Old', 'Out'], 'default is outside London (old files have no london flag)');
   assert.deepEqual(names('london'), ['In']);
   assert.deepEqual(names('both'), ['In', 'Old', 'Out']);
+});
+
+test('shortlisted: saved places within 1.2 km of the station, nearest first', () => {
+  const st = { lat: 51.8146, lng: -0.3515 };
+  const saved = [
+    { id: 'far', label: 'Far away', lat: 51.83, lng: -0.3515 }, // ~1.7 km
+    { id: 'near', label: 'AL5 4FQ', lat: 51.8150, lng: -0.3515 }, // ~45 m
+    { id: 'mid', label: 'AL5 2BB', lat: 51.8236, lng: -0.3515 }, // ~1 km
+    { id: 'nowhere', label: 'No location' },
+  ];
+  assert.deepEqual(shortlistedNear(st, saved).map((e) => e.id), ['near', 'mid']);
+  assert.deepEqual(shortlistedNear(st, []), []);
+  assert.deepEqual(shortlistedNear(st, undefined), []);
 });
 
 test('pages: 20 a page, page number kept in range', () => {

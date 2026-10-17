@@ -57,6 +57,24 @@ export function inLondonZones(zone) {
   return String(zone ?? '').split(/[+/]/).map(Number).some((z) => z >= 3 && z <= 6);
 }
 
+/** Straight-line metres between two points. */
+function metres(aLat, aLng, bLat, bLng) {
+  const r = Math.PI / 180;
+  const x = (bLng - aLng) * r * Math.cos(((aLat + bLat) / 2) * r);
+  const y = (bLat - aLat) * r;
+  return Math.sqrt(x * x + y * y) * 6371000;
+}
+
+/** Shortlisted places within walking range of a station (the area Find places prices), nearest first. */
+export function shortlistedNear(station, entries = [], maxM = MAX_WALK * WALK_M_PER_MIN) {
+  return (entries || [])
+    .filter((e) => Number.isFinite(e.lat) && Number.isFinite(e.lng))
+    .map((e) => ({ e, d: metres(station.lat, station.lng, e.lat, e.lng) }))
+    .filter((x) => x.d <= maxM)
+    .sort((a, b) => a.d - b.d)
+    .map((x) => x.e);
+}
+
 export const PAGE_SIZE = 20;
 
 /** One page of a list, with the page number kept in range. */
