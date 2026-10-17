@@ -81,26 +81,29 @@ This is the slow part (the owner was told 20–40 minutes and accepted that). Re
 - **Schools** setting: Good or Outstanding (default), Outstanding primary, Outstanding secondary, or both.
 - **Pages of 20**; the map shows only the current page's pins.
 
-### London zones 3–6 (agreed with the owner on 17 Oct 2026)
+### London zones (agreed with the owner on 17 Oct 2026)
 
-**Why:** outer London (for example Bexley, Havering, Sutton, Bromley) may have 4-bed houses under the budget. This reverses the earlier "outside London only" choice for **zones 3–6**. Zones 1–2 stay out: 4-bed houses there are almost always over £1.5m, so they'd only slow the search.
+**Why:** outer London (for example Bexley, Havering, Sutton, Bromley) may have 4-bed houses under the budget. This reverses the earlier "outside London only" choice for **Greater London zones 3–6**. Zones 1–2 stay out: 4-bed houses there are almost always over £1.5m, so they'd only slow the search.
+
+**Zones 7–9** are outside Greater London (Amersham, Shenfield, Cheshunt…). National Rail stations there are already in the list. **Tube-only stations outside Greater London** (Chesham, Epping, Loughton, Theydon Bois, Croxley, Moor Park…) were missing, because the list only read National Rail; they're added now and belong to the "Outside London" group. The owner pointed out that London has 9 zones.
 
 **Which stations:**
 - Tube and DLR stations from TfL's station list per mode (`StopPoint/Mode/tube`, `/dlr`), which includes each station's zone.
 - National Rail, Overground and Elizabeth line stations in Greater London from NaPTAN (already downloaded). Their zone comes from TfL `StopPoint/{id}`, one call per station, cached.
-- Keep a station if **any** of its zones is 3, 4, 5 or 6. "2+3" counts; "1+2" doesn't. Stations with no zone from TfL are left out, and setup logs how many.
+- Inside Greater London (postcodes.io region "London"): keep a station if **any** of its zones is 3–6. "2+3" counts; "1+2" doesn't. London stations with no zone from TfL are left out, and setup logs how many.
+- Outside Greater London: keep every station as before, now including Tube-only ones. Their zone (7–9), if any, is shown but not used as a filter.
 - Trams are left out.
-- Each London station is saved with `london: true` and its `zone`, for example "4" or "2+3".
+- Each station is saved with `london` (true inside Greater London) and its `zone` where TfL has one, for example "4", "2+3" or "9".
 
 **Commute:** unchanged. Walk plus the fastest trip to any of the 16 central termini, planned station to station by TfL id. The Tube counts, for example the Northern line to London Bridge.
 
-**Price:** in London, **terraced houses count too**, because most London 4-beds are terraced. So in London it's detached, semi and terraced. Outside London it stays detached and semi. Rooms, budget and bedrooms rules are the same everywhere. Rows say which house types were counted.
+**Price:** in Greater London, **terraced houses count too**, because most London 4-beds are terraced. So in London it's detached, semi and terraced. Outside London it stays detached and semi. Rooms, budget and bedrooms rules are the same everywhere. Rows say which house types were counted.
 
 **Schools:** the same rule. London catchments are often much tighter than the estimate's distance bands, so when London is shown, the page adds a note: "London school places often go by a few hundred metres: check the council's last distance offered before relying on 'likely'."
 
 **Page:**
-- A new **Area** dropdown: Outside London (default), London zones 3–6, or Both. It's remembered like the other settings and re-filters instantly.
-- London rows show their zone, for example "Zone 4", next to the station name.
+- A new **Area** dropdown: Outside London (default), London zones 3–6, or Both. "Outside London" means outside Greater London, so it includes zones 7–9. It's remembered like the other settings and re-filters instantly.
+- Rows with a zone show it, for example "Zone 4" or "Zone 9", next to the station name.
 - Flood and click-through are unchanged.
 
 **Setup:**
