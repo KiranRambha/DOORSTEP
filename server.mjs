@@ -1,6 +1,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { ROOT, loadEnv, isSafeWrite } from './lib/util.mjs';
 import { lookupLocation, nearbySchools, transport, crime, prices, DESTINATIONS } from './lib/sources.mjs';
 import { saveOverride } from './lib/catchment.mjs';
@@ -10,6 +11,8 @@ import { findStations, stationPrice } from './lib/stations.mjs';
 
 loadEnv();
 const PORT = Number(process.env.PORT) || 5173;
+// This Mac only by default. HOST=0.0.0.0 also lets phones on the same Wi-Fi open it (and save changes).
+const HOST = process.env.HOST || '127.0.0.1';
 const PUBLIC = path.join(ROOT, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json' };
 
@@ -88,7 +91,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // The saved shortlist (only reachable from this computer: the server binds to 127.0.0.1).
+  // The saved shortlist (only reachable from this computer unless HOST is set: see the top of this file).
   if (url.pathname === '/api/shortlist') {
     try {
       if (req.method !== 'GET' && !isSafeWrite(req.headers, { body: req.method === 'POST' })) {
@@ -131,8 +134,12 @@ const server = http.createServer(async (req, res) => {
   fs.createReadStream(file).pipe(res);
 });
 
-server.listen(PORT, '127.0.0.1', () => {
+server.listen(PORT, HOST, () => {
   console.log(`\n  Doorstep is running at http://localhost:${PORT}\n`);
+  if (HOST !== '127.0.0.1' && HOST !== 'localhost') {
+    const lan = Object.values(os.networkInterfaces()).flat().find((i) => i?.family === 'IPv4' && !i.internal)?.address;
+    if (lan) console.log(`  On your phone (same Wi-Fi): http://${lan}:${PORT}\n  Anyone on this network can also change your shortlist while it runs like this.\n`);
+  }
   if (!fs.existsSync(path.join(ROOT, 'data', 'schools.json'))) {
     console.log('  School ratings aren\'t downloaded yet. Run "npm run setup" once, then restart.\n');
   }

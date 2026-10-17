@@ -23,11 +23,12 @@ npm run setup   # Ofsted results -> data/schools.json, then EA flood postcodes -
 npm run setup:flood   # just the flood file (EA updates it quarterly)
 npm run setup:stations   # Find places: NaPTAN stations + TfL trip per station -> data/stations.json (10-40 min, resumes via cache). Re-run every few months, then restart.
 npm start       # http://localhost:5173  (binds to 127.0.0.1 only)
+HOST=0.0.0.0 npm start   # also reachable from a phone on the same Wi-Fi (prints the LAN address); anyone on the network can then save changes
 npm test        # node:test, fully offline, every API mocked
 ```
 
 - **No npm dependencies.** Plain Node 18+ (`fetch`, `node:test`) and vanilla JS in the browser. Leaflet 1.9.4 loads from cdnjs. Don't add packages without a good reason.
-- Optional `.env`: `EPC_TOKEN` (enables the room-count / likely-4-bed filter), `TFL_APP_KEY`, `PORT`.
+- Optional `.env`: `EPC_TOKEN` (enables the room-count / likely-4-bed filter), `TFL_APP_KEY`, `PORT`, `HOST`.
 - API responses are cached in `data/cache/`. Cache keys are versioned (`transport:v2`, `crime:v2`, `prices:v1`, `flood:v2`, `stjourney:v2`, `findprice:v1`). **Bump the version when you change the shape of cached data**, or old entries will break the page.
 - `data/` is git-ignored: `schools.json`, `flood.json`, `stations.json`, `cache/`, plus two files of the owner's own data that must **never be deleted or blanked**: `catchment.json` (saved cut-off distances) and `shortlist.json` (saved places). `lib/shortlist.mjs` refuses to write if `shortlist.json` won't parse.
 - Tests: `npm test` runs `test/*.test.mjs` (`doorstep`, `flood`, `shortlist`, `find`; zip helper in `test/helpers.mjs`).

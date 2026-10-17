@@ -24,6 +24,8 @@ npm start         # then open http://localhost:5173
 
 There are no packages to install. Re-run `npm run setup` once a month to pick up new inspections. `npm run setup:flood` refreshes just the flood data (the Environment Agency updates it every few months).
 
+**On your phone:** run `HOST=0.0.0.0 npm start` instead, then open the address it prints (like `http://192.168.1.20:5173`) on a phone on the same Wi-Fi. While it runs like that, anyone on your network can also change your shortlist, so use plain `npm start` otherwise.
+
 For **Find places**, also run `npm run setup:stations` once (10 to 40 minutes, best with `TFL_APP_KEY` in `.env`). It plans every station's 9am weekday trip into London. Re-run it every few months; if it stops part-way, run it again and it carries on.
 
 ## Optional: filter for 4-bed houses
