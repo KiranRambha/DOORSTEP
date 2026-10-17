@@ -1,4 +1,5 @@
 import { initFind, showFind } from './find-view.js';
+import { friendlyError } from './errors.js';
 import { median, chance, goodChance, isFaithSchool, crimeTrendPct, shortlistId, buildSnapshot, mergeSnapshot, bestInColumn, faithLabel, faithSettingsDiffer } from './snapshot.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -37,7 +38,7 @@ async function api(path) {
 }
 
 const loading = (msg) => `<p class="loading">${esc(msg)}</p>`;
-const errorBox = (e) => `<p class="error">${esc(e.message || e)}</p>`;
+const errorBox = (e) => `<p class="error">${esc(friendlyError(e))}</p>`;
 
 /* ───────────── Map ───────────── */
 
@@ -197,7 +198,7 @@ function drawTransport() {
   if (d && !d.error) {
     html += `<div class="door"><div class="door-head"><span class="big">${d.minutes} min</span><span>door to door · leave ${esc(d.departs)} · ${d.changes ? `${d.changes} change${d.changes === 1 ? '' : 's'}` : 'direct'}</span></div>${journeyBlock(d, dest, 'door')}</div>`;
   } else if (d?.error) {
-    html += `<p class="note">Couldn't plan a door-to-door journey: ${esc(d.error)}</p>`;
+    html += `<p class="note">Couldn't plan a door-to-door journey. ${esc(friendlyError(d.error))}</p>`;
   }
   if (!t.stations.length) {
     html += '<p class="note">No rail, Tube or DLR stations within 10 km.</p>';
@@ -468,7 +469,7 @@ async function saveCatchment(form, clear) {
     btn.disabled = false;
     let p = form.querySelector('.error');
     if (!p) { p = document.createElement('p'); p.className = 'error'; form.append(p); }
-    p.textContent = e.message;
+    p.textContent = friendlyError(e);
   }
 }
 
@@ -536,7 +537,7 @@ function drawPrices() {
   if (!p.epc?.enabled) {
     html += `<div class="callout">Land Registry doesn't record bedrooms, so this shows every detached and semi-detached sale. To filter for 4-bed houses, add a free EPC token (it gives each home's room count and floor area). See the README for the two-minute setup.</div>`;
   } else if (p.epc.error) {
-    html += `<div class="callout">Couldn't reach the EPC service, so room counts are missing: ${esc(p.epc.error)}</div>`;
+    html += `<div class="callout">Couldn't reach the EPC service, so room counts are missing. ${esc(friendlyError(p.epc.error))}</div>`;
   } else {
     html += `<div class="callout">Matched ${p.epc.matched} of ${p.epc.total} sales to an energy certificate. "Habitable rooms" counts bedrooms plus living and dining rooms, so a 4-bed house usually has 5 or 6. Sales without a certificate are hidden when a size filter is on.</div>`;
   }
@@ -903,7 +904,7 @@ async function toggleSave() {
     if (i >= 0) state.shortlist[i] = saved; else state.shortlist.push(saved);
     showToast(`Saved ${saved.label} to your shortlist.`);
   } catch (e) {
-    showToast(`Couldn't save: ${e.message}`);
+    showToast(`Couldn't save. ${friendlyError(e)}`);
   }
   saving = false;
   $('#save-place').disabled = false;
@@ -935,7 +936,7 @@ function removeWithUndo(entry) {
     // keepalive lets the request finish even if the page is closing.
     apiSend('DELETE', `/api/shortlist?id=${encodeURIComponent(entry.id)}`, null, { keepalive: true }).catch((e) => {
       state.shortlist.splice(Math.min(i, state.shortlist.length), 0, entry);
-      showToast(`Couldn't remove it: ${e.message}`);
+      showToast(`Couldn't remove it. ${friendlyError(e)}`);
       redrawShortlistBits();
     });
   };
@@ -973,7 +974,7 @@ async function refreshEntry(entry, settings = entry.settings || {}) {
     const i = state.shortlist.findIndex((e) => e.id === entry.id);
     if (i >= 0) state.shortlist[i] = saved;
   } catch (e) {
-    if (state.shortlist.some((x) => x.id === entry.id)) showToast(`Couldn't refresh ${entry.label}: ${e.message}`);
+    if (state.shortlist.some((x) => x.id === entry.id)) showToast(`Couldn't refresh ${entry.label}. ${friendlyError(e)}`);
   } finally {
     state.slBusy.delete(entry.id);
     drawShortlist();
@@ -1224,7 +1225,7 @@ async function search(q) {
     $('#results').hidden = true;
     let p = $('#search-error');
     if (!p) { p = document.createElement('p'); p.id = 'search-error'; p.className = 'error'; $('#intro').prepend(p); }
-    p.textContent = e.message;
+    p.textContent = friendlyError(e);
   } finally {
     btn.disabled = false;
   }
@@ -1339,7 +1340,7 @@ async function boot() {
     state.shortlist = (await api('/api/shortlist')).entries;
   } catch (e) {
     state.shortlist = [];
-    showToast(`Couldn't load your shortlist: ${e.message}`);
+    showToast(`Couldn't load your shortlist. ${friendlyError(e)}`);
   }
   drawSaveButton();
   showView();

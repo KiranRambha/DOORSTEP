@@ -1,6 +1,7 @@
 // Find places: the rules that decide whether a station passes. Pure functions, shared by
 // the page and the tests, so changing a setting re-filters without new requests.
 import { median } from './snapshot.js';
+import { friendlyError } from './errors.js';
 
 export const MIN_WALK = 5; // minutes; less than this leaves too few homes to judge
 export const MAX_WALK = 15; // minutes; prices are fetched within this walk (1.2 km), so never allow more
@@ -24,7 +25,7 @@ const shortMoney = (n) => (n >= 1e6 ? `£${(n / 1e6).toFixed(2).replace(/0$/, ''
  *  status: 'pass' | 'over' | 'unknown' (never a pass) | 'needs-epc' (fetch again with this budget). */
 export function priceVerdict(p, { allowanceMin, budget }) {
   const out = (status, reason, extra = {}) => ({ status, reason, median: null, count: 0, allSizes: false, ...extra });
-  if (!p || p.error) return out('unknown', p?.error || 'Price not checked');
+  if (!p || p.error) return out('unknown', p ? friendlyError(p.error) : 'Price not checked');
   const epc = p.epc || {};
   if (!p.sales?.length) return out('unknown', 'No sales nearby');
   if (epc.enabled && !epc.ran) {

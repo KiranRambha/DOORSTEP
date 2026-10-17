@@ -31,7 +31,7 @@ npm test        # node:test, fully offline, every API mocked
 - Optional `.env`: `EPC_TOKEN` (enables the room-count / likely-4-bed filter), `TFL_APP_KEY`, `PORT`, `HOST`.
 - API responses are cached in `data/cache/`. Cache keys are versioned (`transport:v2`, `crime:v2`, `prices:v1`, `flood:v2`, `stjourney:v2`, `findprice:v1`). **Bump the version when you change the shape of cached data**, or old entries will break the page.
 - `data/` is git-ignored: `schools.json`, `flood.json`, `stations.json`, `cache/`, plus two files of the owner's own data that must **never be deleted or blanked**: `catchment.json` (saved cut-off distances) and `shortlist.json` (saved places). `lib/shortlist.mjs` refuses to write if `shortlist.json` won't parse.
-- Tests: `npm test` runs `test/*.test.mjs` (`doorstep`, `flood`, `shortlist`, `find`; zip helper in `test/helpers.mjs`).
+- Tests: `npm test` runs `test/*.test.mjs` (`doorstep`, `flood`, `shortlist`, `find`, `errors`; zip helper in `test/helpers.mjs`).
 
 ## Layout
 
@@ -52,6 +52,7 @@ npm test        # node:test, fully offline, every API mocked
 | `public/find.js` | Pure Find places rules shared by the page and tests: `walkAllowance`, `priceVerdict`, `rankStations` |
 | `public/find-view.js` | The Find places view (settings bar, price queue, list, map) |
 | `public/index.html`, `app.js`, `styles.css` | The whole front end (no framework) |
+| `public/errors.js` | `friendlyError()`: turns raw failures ("api.tfl.gov.uk returned 404: {json}") into plain English. Use it wherever an error reaches the page. |
 | `public/snapshot.js` | Pure helpers shared by the page, the server and the tests: shortlist ids, snapshot building, refresh merge, best-in-column |
 | `test/*.test.mjs` | Unit plus mocked end-to-end tests |
 

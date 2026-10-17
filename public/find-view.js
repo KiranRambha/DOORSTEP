@@ -1,6 +1,7 @@
 // Find places view: settings bar, ranked list of stations, prices filling in, and a map of matches.
 // The rules live in find.js; this file only fetches and draws.
 import { priceVerdict, rankStations, retryable, MAX_WALK } from './find.js';
+import { friendlyError } from './errors.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const CONCURRENCY = 3;
@@ -86,7 +87,7 @@ async function load() {
     if (S.dataFaith !== faith) return; // a newer load started
     S.data = data;
   } catch (e) {
-    $('#fp-progress').innerHTML = `<span class="error">${d.esc(e.message)}</span>`;
+    $('#fp-progress').innerHTML = `<span class="error">${d.esc(friendlyError(e))}</span>`;
     return;
   }
   S.fitted = '';
