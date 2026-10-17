@@ -1,6 +1,6 @@
 // Find places view: settings bar, ranked list of stations, prices filling in, and a map of matches.
 // The rules live in find.js; this file only fetches and draws.
-import { priceVerdict, rankStations, retryable, MAX_WALK } from './find.js';
+import { priceVerdict, rankStations, retryable, pageOf, MAX_WALK, SCHOOL_LEVELS } from './find.js';
 import { friendlyError } from './errors.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -23,12 +23,14 @@ const S = {
   map: null,
   pins: null,
   fitted: '',
+  page: 1,
 };
 
 const settings = () => ({
   maxDoor: Number($('#fp-door').value),
   maxWalk: Number($('#fp-walk').value),
   budget: Number($('#fp-budget').value),
+  schools: $('#fp-schools').value,
   faith: $('#fp-faith').value,
 });
 
@@ -43,12 +45,20 @@ export function initFind(deps) {
   fill($('#fp-door'), DOOR_OPTIONS, (v) => `${v} min or less`, d.store.get('doorstep.find.maxDoor'), 60);
   fill($('#fp-walk'), WALK_OPTIONS, (v) => `up to ${v} min`, d.store.get('doorstep.find.maxWalk'), 15);
   fill($('#fp-budget'), BUDGETS, (v) => `up to ${d.gbpShort(v)}`, d.store.get('doorstep.find.budget'), 800000);
+  fill($('#fp-schools'), Object.keys(SCHOOL_LEVELS), (v) => SCHOOL_LEVELS[v], d.store.get('doorstep.find.schools'), 'good');
   $('#fp-faith').innerHTML = $('#school-faith').innerHTML; // same options as the Schools panel
   $('#fp-faith').value = d.store.get('doorstep.faith') || '';
 
-  for (const [id, key] of [['#fp-door', 'maxDoor'], ['#fp-walk', 'maxWalk'], ['#fp-budget', 'budget']]) {
-    $(id).addEventListener('change', () => { d.store.set(`doorstep.find.${key}`, $(id).value); draw(); pump(); });
+  for (const [id, key] of [['#fp-door', 'maxDoor'], ['#fp-walk', 'maxWalk'], ['#fp-budget', 'budget'], ['#fp-schools', 'schools']]) {
+    $(id).addEventListener('change', () => { d.store.set(`doorstep.find.${key}`, $(id).value); S.page = 1; draw(); pump(); });
   }
+  $('#fp-pager').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-page]');
+    if (!b) return;
+    S.page = Number(b.dataset.page);
+    draw();
+    $('#fp-progress').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
   $('#fp-faith').addEventListener('change', () => {
     d.store.set('doorstep.faith', $('#fp-faith').value);
     $('#school-faith').value = $('#fp-faith').value;
@@ -80,6 +90,7 @@ async function load() {
   const faith = $('#fp-faith').value;
   S.dataFaith = faith;
   S.data = null;
+  S.page = 1;
   $('#fp-progress').innerHTML = '<span class="loading">Finding stations…</span>';
   $('#fp-list').innerHTML = '';
   try {
@@ -208,8 +219,13 @@ function draw() {
     ? '<p class="sl-warn">The energy certificate service isn\'t responding, so room counts can\'t be checked. Try again later.</p>'
     : '';
 
-  $('#fp-list').innerHTML = [...pass.map((r, i) => rowHtml(r.st, i + 1, r.v)), ...pending.map((r) => rowHtml(r.st, 0, r.v))].join('')
-    || (pending.length ? '' : '<li class="fp-empty">No stations match these settings. Try a longer door-to-door time or a higher budget.</li>');
+  // Matches first (numbered), then stations still being checked; 20 a page.
+  const rows = [...pass.map((r, i) => ({ ...r, n: i + 1 })), ...pending.map((r) => ({ ...r, n: 0 }))];
+  const pg = pageOf(rows, S.page);
+  S.page = pg.page;
+  $('#fp-list').innerHTML = pg.items.map((r) => rowHtml(r.st, r.n, r.v)).join('')
+    || (pending.length ? '' : '<li class="fp-empty">No stations match these settings. Try a longer door-to-door time, a higher budget or a different schools setting.</li>');
+  drawPager(pg, rows.length);
 
   const un = $('#fp-unknown');
   un.hidden = !unknown.length;
@@ -219,7 +235,17 @@ function draw() {
   $('#fp-dates').textContent = `Train times as at ${dateOf(S.data.builtAt)} (planned for ${journeyDay(S.data.journeyDate)}, arriving 09:00)`
     + `${S.data.schoolsAsOf ? ` · Ofsted results as at ${dateOf(S.data.schoolsAsOf)}` : ''} · Sales from the last 3 years`;
 
-  drawPins(pass, ranked);
+  drawPins(pg.items.filter((r) => r.v.status === 'pass'), ranked);
+}
+
+function drawPager(pg, total) {
+  const nav = $('#fp-pager');
+  nav.hidden = pg.pages < 2;
+  if (nav.hidden) return (nav.innerHTML = '');
+  const btn = (page, label, aria) => `<button type="button" class="btn" data-page="${page}" aria-label="${aria}"${page < 1 || page > pg.pages ? ' disabled' : ''}>${label}</button>`;
+  nav.innerHTML = `${btn(pg.page - 1, '‹ Previous', 'Previous page')}
+    <span class="fp-page">Page ${pg.page} of ${pg.pages} <small>· ${pg.start + 1}–${pg.start + pg.items.length} of ${total}</small></span>
+    ${btn(pg.page + 1, 'Next ›', 'Next page')}`;
 }
 
 /* ───────── Map ───────── */
@@ -237,8 +263,8 @@ function initMap() {
 function drawPins(pass, ranked) {
   if (!S.map) return;
   S.pins.clearLayers();
-  pass.forEach(({ st }, i) => {
-    const icon = L.divIcon({ className: '', html: `<span class="fp-pin" data-pin="${d.esc(st.id)}">${i + 1}</span>`, iconSize: [26, 26], iconAnchor: [13, 13] });
+  pass.forEach(({ st, n }) => {
+    const icon = L.divIcon({ className: '', html: `<span class="fp-pin" data-pin="${d.esc(st.id)}">${n}</span>`, iconSize: [26, 26], iconAnchor: [13, 13] });
     L.marker([st.lat, st.lng], { icon, title: st.name })
       .on('mouseover', () => hot(st.id))
       .on('mouseout', () => hot(null))

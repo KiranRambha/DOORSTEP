@@ -484,6 +484,12 @@ table.sl td.best .chip.in, table.sl td.best .chip.likely, table.sl td.best .chip
 .fp-progress { margin: 0 0 10px; font-size: 14px; }
 .fp-progress .muted, .muted { color: var(--muted); }
 .fp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.fp-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 14px 0 4px; }
+.fp-pager[hidden] { display: none; }
+.fp-pager .btn:disabled { opacity: .45; cursor: default; }
+.fp-page { font-size: 14px; font-weight: 600; text-align: center; white-space: nowrap; }
+.fp-page small { color: var(--muted); font-weight: 400; font-size: 12.5px; }
+@media (max-width: 520px) { .fp-page small { display: block; } }
 .fp-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 4px 14px; padding: 14px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
 .fp-row:hover, .fp-row.hot { border-color: var(--accent); }
 .fp-row.pending { opacity: .75; }

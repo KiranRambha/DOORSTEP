@@ -17,7 +17,34 @@ export function walkAllowance(trainMin, { maxDoor = 60, maxWalk = 15 } = {}) {
   return mins >= MIN_WALK ? mins : null;
 }
 
-export const schoolsPass = (station) => Boolean(station.primary && station.secondary);
+/** The Schools setting. A station's school per phase is already the best likely Good+ one,
+ *  Outstanding first, so "great" means an Outstanding school you'd likely get into. */
+export const SCHOOL_LEVELS = {
+  good: 'Good or Outstanding',
+  primary: 'Outstanding primary',
+  secondary: 'Outstanding secondary',
+  both: 'Outstanding primary and secondary',
+};
+
+export function schoolsPass(station, level = 'good') {
+  const { primary: p, secondary: s } = station;
+  if (!p || !s) return false;
+  const top = (x) => x.tone === 'great';
+  if (level === 'primary') return top(p);
+  if (level === 'secondary') return top(s);
+  if (level === 'both') return top(p) && top(s);
+  return true;
+}
+
+export const PAGE_SIZE = 20;
+
+/** One page of a list, with the page number kept in range. */
+export function pageOf(items, page, size = PAGE_SIZE) {
+  const pages = Math.max(1, Math.ceil(items.length / size));
+  const p = Math.min(Math.max(1, page || 1), pages);
+  const start = (p - 1) * size;
+  return { items: items.slice(start, start + size), page: p, pages, start };
+}
 
 const shortMoney = (n) => (n >= 1e6 ? `£${(n / 1e6).toFixed(2).replace(/0$/, '')}m` : `£${Math.round(n / 1000)}k`);
 
@@ -48,7 +75,7 @@ export function priceVerdict(p, { allowanceMin, budget }) {
 export function rankStations(stations, settings) {
   return stations
     .map((s) => ({ ...s, allowanceMin: walkAllowance(s.trainMin, settings) }))
-    .filter((s) => s.allowanceMin != null && schoolsPass(s))
+    .filter((s) => s.allowanceMin != null && schoolsPass(s, settings.schools))
     .sort((a, b) => a.trainMin - b.trainMin || a.name.localeCompare(b.name));
 }
 

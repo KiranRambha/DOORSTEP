@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { walkAllowance, priceVerdict, rankStations, retryable } from '../public/find.js';
+import { walkAllowance, priceVerdict, rankStations, retryable, pageOf } from '../public/find.js';
 import { nextTuesday } from '../lib/sources.mjs';
 
 test('next Tuesday uses the local date, even just after midnight in summer time', () => {
@@ -74,6 +74,26 @@ test('ranking: commute and schools filter, fastest train first', () => {
   const out = rankStations([st('B', 50), st('A', 30), st('C', 58), st('D', 20, false), st('E', null)], { maxDoor: 60, maxWalk: 15 });
   assert.deepEqual(out.map((s) => s.name), ['A', 'B']);
   assert.equal(out[1].allowanceMin, 10);
+});
+
+test('ranking: the schools setting can ask for Outstanding primary, secondary or both', () => {
+  const st = (name, p, s) => ({ name, trainMin: 30, primary: { tone: p }, secondary: { tone: s } });
+  const all = [st('GG', 'good', 'good'), st('OG', 'great', 'good'), st('GO', 'good', 'great'), st('OO', 'great', 'great')];
+  const names = (schools) => rankStations(all, { maxDoor: 60, maxWalk: 15, schools }).map((x) => x.name).sort();
+  assert.deepEqual(names(undefined), ['GG', 'GO', 'OG', 'OO'], 'default is Good or Outstanding');
+  assert.deepEqual(names('good'), ['GG', 'GO', 'OG', 'OO']);
+  assert.deepEqual(names('primary'), ['OG', 'OO']);
+  assert.deepEqual(names('secondary'), ['GO', 'OO']);
+  assert.deepEqual(names('both'), ['OO']);
+});
+
+test('pages: 20 a page, page number kept in range', () => {
+  const items = Array.from({ length: 45 }, (_, i) => i);
+  assert.deepEqual(pageOf(items, 1), { items: items.slice(0, 20), page: 1, pages: 3, start: 0 });
+  assert.deepEqual(pageOf(items, 3), { items: items.slice(40), page: 3, pages: 3, start: 40 });
+  assert.equal(pageOf(items, 9).page, 3, 'past the end goes to the last page');
+  assert.equal(pageOf(items, 0).page, 1);
+  assert.deepEqual(pageOf([], 2), { items: [], page: 1, pages: 1, start: 0 });
 });
 
 /* ───────── Station setup (mocked NaPTAN, postcodes.io and TfL) ───────── */

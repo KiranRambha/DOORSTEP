@@ -218,6 +218,7 @@
         <label class="mini">Door to door <select id="fp-door"></select></label>
         <label class="mini">Walk to the station <select id="fp-walk"></select></label>
         <label class="mini">Budget <select id="fp-budget"></select></label>
+        <label class="mini">Schools <select id="fp-schools" title="Each still needs a school you'd likely get into."></select></label>
         <label class="mini">Your faith <select id="fp-faith" title="Used to estimate your chances at faith schools. Shared with the Schools panel."></select></label>
       </div>
       <p class="sub">Stations outside London where a walk plus the train to a central London terminus fits your door-to-door time, with a Good or Outstanding primary and secondary you'd likely get into, and a typical 4-bed (detached or semi) under your budget.</p>
@@ -226,6 +227,7 @@
           <p class="fp-progress" id="fp-progress" aria-live="polite"></p>
           <div id="fp-banner"></div>
           <ol class="fp-list" id="fp-list"></ol>
+          <nav class="fp-pager" id="fp-pager" aria-label="Pages" hidden></nav>
           <details class="fp-unknown" id="fp-unknown" hidden><summary></summary><ul></ul></details>
           <p class="sub fp-dates" id="fp-dates"></p>
         </div>
