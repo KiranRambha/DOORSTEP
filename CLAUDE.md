@@ -124,6 +124,7 @@ npm test        # node:test, fully offline, every API mocked
 - Light and dark themes are both required, using CSS tokens in `:root` and the dark media query. Check both.
 - **Pills/chips must never wrap.** Keep the verdict word in the pill and put extra detail in a small grey line under it (`chipHtml`, `splitLabel`).
 - The whole school row is clickable, and details slide open (Ofsted grades on the left, catchment box on the right). Closed detail rows are `inert`.
+- On phones (≤600px) the schools table becomes cards via CSS only (name + distance on top, Ofsted + catchment below); desktop keeps the table. `html` sets `text-size-adjust: 100%` so iPhone Safari doesn't enlarge text in wide content.
 - Every panel says how current its data is ("Ofsted results as at…", "most recent sale recorded…", "police data up to…").
 - Distances and prices use the body font with tabular numbers (no monospace).
 - Custom select chevrons sit about 8px from the right edge (the owner checked this).

@@ -523,3 +523,26 @@ table.sl td.best .chip.in, table.sl td.best .chip.likely, table.sl td.best .chip
   table.schools .badge { font-size: 12px; font-weight: 500; }
   table.schools .badge-wrap small { font-size: 11px; }
 }
+/* Phones: each school is a card (name and distance on top, Ofsted and catchment underneath)
+   instead of a table wider than the screen. Desktop keeps the table. */
+@media (max-width: 600px) {
+  table.schools, table.schools tbody { display: block; min-width: 0; width: 100%; }
+  table.schools colgroup, table.schools thead { display: none; }
+  table.schools tr.school-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px;
+    position: relative; padding: 10px 0 12px; border-bottom: 1px solid var(--line);
+  }
+  table.schools tr.school-row.is-open { border-bottom: 0; background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+  table.schools tr.school-row.is-open > td { background: none; }
+  table.schools tr.school-row > td { display: block; border: 0; padding: 0 0 0 10px; }
+  table.schools tr.school-row > td:nth-child(1) { grid-column: 1; grid-row: 1; }
+  table.schools tr.school-row > td:nth-child(4) { grid-column: 2; grid-row: 1; padding-top: 2px; }
+  table.schools tr.school-row > td:nth-child(2) { grid-column: 1; grid-row: 2; margin-top: 6px; }
+  table.schools tr.school-row > td:nth-child(3) { grid-column: 2; grid-row: 2; margin-top: 6px; text-align: right; }
+  /* The "likely place" bar runs down the whole card, not just the name. */
+  tr.school-row.hl > td:first-child::before { content: none; }
+  tr.school-row.hl::before { content: ""; position: absolute; left: 0; top: 10px; bottom: 12px; width: 3px; border-radius: 2px; background: var(--accent); }
+  tr.school-row.hl.is-open::before { bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+  table.schools tr.more-row { display: block; }
+  table.schools tr.more-row > td { display: block; }
+}
