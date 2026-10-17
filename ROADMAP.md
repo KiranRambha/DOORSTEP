@@ -26,7 +26,6 @@ Found while building and reviewing the shortlist and flood work. None block anyt
 - **Shortlist ids for place names** treat "St Albans" and "St. Albans" as different places (postcodes are fine).
 - **Zip reader** has no ZIP64 support (only matters if the EA file ever passes 4 GB; it's ~5 MB).
 - **Code comment** in `lib/flood.mjs` near `loadFlood` should say a new `flood.json` needs a server restart.
-- **Map zoom buttons over the header on phones.** On the main place view, scrolling on a narrow screen puts Leaflet's +/− buttons on top of the sticky header. The Find places map fixes this with `isolation: isolate` on `#find-map`; the same one line on `#map` should do it.
 - **Find places: near misses.** Over-budget stations are only counted, not listed. A "Didn't make it" list with reasons (e.g. "over budget by £60k") could help.
 
 ## Already done (for context)
