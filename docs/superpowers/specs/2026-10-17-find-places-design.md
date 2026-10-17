@@ -75,6 +75,12 @@ This is the slow part (the owner was told 20–40 minutes and accepted that). Re
 - If `stations.json` is missing: a plain message telling the owner to run `npm run setup:stations`, like the schools message.
 - Light and dark themes, and phone width, per the usual conventions.
 
+### Added after the build (17 Oct 2026, owner's requests)
+
+- **Bedrooms** setting: 3+, 4+ (default) or 5+, meaning EPC habitable rooms ≥ bedrooms + 1.
+- **Schools** setting: Good or Outstanding (default), Outstanding primary, Outstanding secondary, or both.
+- **Pages of 20**; the map shows only the current page's pins.
+
 ## Goals, non-goals, anti-goals
 
 **Goals:** a list of stations meeting all the rules in seconds; prices filling in live; settings changes feel instant; click through to the full view.

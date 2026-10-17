@@ -12,7 +12,7 @@ A personal, local web app for house-hunting in England and Wales. You type a pos
 - **Crime**: the doorstep compared with the wider area, the trend, a type filter and map dots
 - **Flood risk**: homes at risk from rivers and the sea within about 1 km, plus EA flood map layers (England only)
 - **Shortlist**: saved snapshots of places compared side by side
-- **Find places**: a reverse search. Stations outside London that fit a door-to-door time into a central terminus, a likely Good+ primary and secondary, and a 4-bed budget
+- **Find places**: a reverse search. Stations outside London that fit a door-to-door time into a central terminus, a likely Good+ (or Outstanding) primary and secondary, and a budget for the chosen number of bedrooms
 
 It was built as a free alternative to liveable.co.uk using only free government open data. It runs on the owner's Mac at `~/Developer/doorstep`.
 
@@ -49,7 +49,7 @@ npm test        # node:test, fully offline, every API mocked
 | `lib/util.mjs` | fetch with retry/timeout, disk cache, CSV parser, geo helpers |
 | `scripts/build-schools.mjs`, `scripts/build-flood.mjs` | `npm run setup` (and `setup:flood`) |
 | `scripts/build-stations.mjs` | `npm run setup:stations` |
-| `public/find.js` | Pure Find places rules shared by the page and tests: `walkAllowance`, `priceVerdict`, `rankStations` |
+| `public/find.js` | Pure Find places rules shared by the page and tests: `walkAllowance`, `priceVerdict`, `rankStations`, `schoolsPass`/`SCHOOL_LEVELS`, `BEDS`, `pageOf` |
 | `public/find-view.js` | The Find places view (settings bar, price queue, list, map) |
 | `public/index.html`, `app.js`, `styles.css` | The whole front end (no framework) |
 | `public/errors.js` | `friendlyError()`: turns raw failures ("api.tfl.gov.uk returned 404: {json}") into plain English. Use it wherever an error reaches the page. |
@@ -129,6 +129,8 @@ npm test        # node:test, fully offline, every API mocked
 - **Pills/chips must never wrap.** Keep the verdict word in the pill and put extra detail in a small grey line under it (`chipHtml`, `splitLabel`).
 - The whole school row is clickable, and details slide open (Ofsted grades on the left, catchment box on the right). Closed detail rows are `inert`.
 - On phones (≤600px) the schools table becomes cards via CSS only (name + distance on top, Ofsted + catchment below); desktop keeps the table. `html` sets `text-size-adjust: 100%` so iPhone Safari doesn't enlarge text in wide content.
+- **iPhone gotchas (keep these):** fields are 16px on touch screens (`pointer: coarse`), or Safari zooms in on tap and stays zoomed. Row hover tints sit inside `@media (hover: hover)`, because iOS keeps `:hover` stuck on the last tapped row. Leaflet maps (`#map`, `#find-map`) need `isolation: isolate`, or their controls and attribution draw over the sticky header.
+- **Errors in plain English:** pass any error text through `friendlyError()` (`public/errors.js`) before showing it; never show raw API responses.
 - Every panel says how current its data is ("Ofsted results as at…", "most recent sale recorded…", "police data up to…").
 - Distances and prices use the body font with tabular numbers (no monospace).
 - Custom select chevrons sit about 8px from the right edge (the owner checked this).
