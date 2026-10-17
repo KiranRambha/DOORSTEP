@@ -3,6 +3,7 @@
 import { median } from './snapshot.js';
 
 export const MIN_WALK = 5; // minutes; less than this leaves too few homes to judge
+export const MAX_WALK = 15; // minutes; prices are fetched within this walk (1.2 km), so never allow more
 export const WALK_M_PER_MIN = 80;
 export const MIN_SALES = 5;
 export const MIN_ROOMS = 5; // EPC habitable rooms: a 4-bed house usually has 5 or 6
@@ -11,7 +12,7 @@ export const MIN_ROOMS = 5; // EPC habitable rooms: a 4-bed house usually has 5 
  *  null when the station is too slow (or couldn't be planned). */
 export function walkAllowance(trainMin, { maxDoor = 60, maxWalk = 15 } = {}) {
   if (trainMin == null) return null;
-  const mins = Math.min(maxWalk, maxDoor - trainMin);
+  const mins = Math.min(maxWalk, MAX_WALK, maxDoor - trainMin);
   return mins >= MIN_WALK ? mins : null;
 }
 

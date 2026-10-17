@@ -1,11 +1,11 @@
 // Find places view: settings bar, ranked list of stations, prices filling in, and a map of matches.
 // The rules live in find.js; this file only fetches and draws.
-import { priceVerdict, rankStations } from './find.js';
+import { priceVerdict, rankStations, MAX_WALK } from './find.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const CONCURRENCY = 3;
 const DOOR_OPTIONS = [45, 50, 55, 60, 65, 70, 75, 80, 90];
-const WALK_OPTIONS = [5, 10, 15, 20];
+const WALK_OPTIONS = [5, 10, 15].filter((m) => m <= MAX_WALK);
 const BUDGETS = Array.from({ length: 23 }, (_, i) => 400000 + i * 50000); // £400k to £1.5m
 const TONE_WORD = { great: 'Outstanding', good: 'Good' };
 
@@ -70,7 +70,7 @@ export function showFind() {
   S.map?.invalidateSize();
   $('#fp-faith').value = d.store.get('doorstep.faith') || '';
   if (!S.data || S.dataFaith !== $('#fp-faith').value) load();
-  else draw();
+  else { S.fitted = ''; draw(); pump(); }
 }
 
 async function load() {
@@ -117,6 +117,8 @@ function nextJob() {
 }
 
 function pump() {
+  // Only while the view is open: otherwise it competes with the place view's own requests.
+  if ($('#find').hidden) return;
   while (S.active < CONCURRENCY) {
     const job = nextJob();
     if (!job) break;
@@ -173,7 +175,7 @@ function rowHtml(st, n, v) {
 }
 
 function draw() {
-  if (!S.data) return;
+  if (!S.data || $('#find').hidden) return;
   if (!S.data.ready) {
     $('#fp-progress').innerHTML = `<span class="callout">${d.esc(S.data.message)}</span>`;
     $('#fp-list').innerHTML = '';

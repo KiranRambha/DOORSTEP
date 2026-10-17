@@ -20,6 +20,10 @@ test('walk allowance shrinks with the train and drops under 5 minutes', () => {
   assert.equal(walkAllowance(null, {}), null);
 });
 
+test('walk allowance never goes past 15 minutes, the radius prices are fetched for', () => {
+  assert.equal(walkAllowance(30, { maxDoor: 60, maxWalk: 20 }), 15);
+});
+
 const sale = (price, distance, rooms = 6) => ({ price, distance, rooms, type: 'Detached' });
 const five = (price, distance = 300) => Array.from({ length: 5 }, () => sale(price, distance));
 
@@ -176,6 +180,8 @@ function priceMocks(flags) {
     const u = String(url);
     if (u.includes('api.postcodes.io/postcodes?lat=')) {
       if (flags.postcodesDown) return json({ error: 'down' }, 500);
+      // One sample point (the station itself) failing: a partial list must not be cached as complete.
+      if (flags.centreDown && Number(new URL(u).searchParams.get('lat')) === HARPENDEN.lat) return json({ error: 'down' }, 400);
       return json({ result: [
         { postcode: 'AL5 1AA', latitude: HARPENDEN.lat + 0.001, longitude: HARPENDEN.lng, country: 'England' }, // ~110 m
         { postcode: 'AL5 2BB', latitude: HARPENDEN.lat + 0.0063, longitude: HARPENDEN.lng, country: 'England' }, // ~700 m
@@ -247,4 +253,15 @@ test('station price: no postcodes is an error and is not cached', async () => {
   assert.equal(r.sales.length, 6);
   assert.equal(r.epc.enabled, false);
   await assert.rejects(stationPrice('NOPE', 900000), /Unknown station/);
+});
+
+test('station price: a partial postcode lookup is an error, not a thinner cached sample', async () => {
+  delete process.env.EPC_TOKEN;
+  const flags = { epcCalls: 0, centreDown: true };
+  priceMocks(flags);
+  const tmp = tempProject({ 'stations.json': STATIONS_FILE });
+  const { stationPrice } = await import(path.join(tmp, 'lib', 'stations.mjs'));
+  await assert.rejects(stationPrice('9100HRPNDN', 900000), /Couldn't look up postcodes/);
+  flags.centreDown = false;
+  assert.equal((await stationPrice('9100HRPNDN', 900000)).sales.length, 6);
 });
