@@ -196,7 +196,7 @@ function drawTransport() {
   const d = t.doorToDoor;
   let html = '';
   if (d && !d.error) {
-    html += `<div class="door"><div class="door-head"><span class="big">${d.minutes} min</span><span>door to door · leave ${esc(d.departs)} · ${d.changes ? `${d.changes} change${d.changes === 1 ? '' : 's'}` : 'direct'}</span></div>${journeyBlock(d, dest, 'door')}</div>`;
+    html += `<div class="door"><div class="door-head"><span class="big">${d.minutes} min</span><span>door to door · leave ${esc(d.departs)} · ${d.changes ? `${d.changes} change${d.changes === 1 ? '' : 's'}` : 'direct'}${d.viaStation ? ` · walk to ${esc(d.viaStation)} estimated` : ''}</span></div>${journeyBlock(d, dest, 'door')}</div>`;
   } else if (d?.error) {
     html += `<p class="note">Couldn't plan a door-to-door journey. ${esc(friendlyError(d.error))}</p>`;
   }

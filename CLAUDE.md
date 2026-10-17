@@ -29,7 +29,7 @@ npm test        # node:test, fully offline, every API mocked
 
 - **No npm dependencies.** Plain Node 18+ (`fetch`, `node:test`) and vanilla JS in the browser. Leaflet 1.9.4 loads from cdnjs. Don't add packages without a good reason.
 - Optional `.env`: `EPC_TOKEN` (enables the room-count / likely-4-bed filter), `TFL_APP_KEY`, `PORT`, `HOST`.
-- API responses are cached in `data/cache/`. Cache keys are versioned (`transport:v2`, `crime:v2`, `prices:v1`, `flood:v2`, `stjourney:v2`, `findprice:v1`). **Bump the version when you change the shape of cached data**, or old entries will break the page.
+- API responses are cached in `data/cache/`. Cache keys are versioned (`transport:v3`, `crime:v2`, `prices:v1`, `flood:v2`, `stjourney:v2`, `findprice:v1`). **Bump the version when you change the shape of cached data**, or old entries will break the page.
 - `data/` is git-ignored: `schools.json`, `flood.json`, `stations.json`, `cache/`, plus two files of the owner's own data that must **never be deleted or blanked**: `catchment.json` (saved cut-off distances) and `shortlist.json` (saved places). `lib/shortlist.mjs` refuses to write if `shortlist.json` won't parse.
 - Tests: `npm test` runs `test/*.test.mjs` (`doorstep`, `flood`, `shortlist`, `find`, `errors`; zip helper in `test/helpers.mjs`).
 
@@ -112,6 +112,7 @@ npm test        # node:test, fully offline, every API mocked
 ### Find places (`lib/stations.mjs`, `public/find.js`, `public/find-view.js`)
 - Design: `docs/superpowers/specs/2026-10-17-find-places-design.md`. Candidates are **National Rail stations in England outside Greater London**, within 100 km of Charing Cross (the owner chose outside London only).
 - **Door to door** = walk + fastest train to **any** of the 16 central termini (`TERMINI` in `lib/sources.mjs`), ending on arrival at the terminus. Setup keeps trains up to 85 min (so the 90-min setting works). It paces TfL calls (at most 4 in flight, one per 150 ms) because sustained bursts got thousands of 429s; the log summarises failed journeys by reason, and re-running retries only those.
+- **Main view commute:** stations are planned by their TfL stop id (`tflId`), never coordinates. If TfL can't plan door to door from the home's coordinates (far from London), `viaStation()` uses the fastest nearby station trip (within 2 km) plus a straight-line walk at 80 m/min, and the page says the walk is estimated.
 - **How setup plans trips (learned the hard way, don't undo):** plan **station to station by TfL stop id** (NaPTAN `9100X` → TfL `910GX`; terminus ids in `TERMINUS_TFL_ID` in `lib/stations.mjs`), because TfL answers "No journey found" for coordinates far from London (Brighton, Cambridge). Time = first train's departure to last train's arrival (`rideMinutes`), because TfL's `duration` adds walks at both ends. Try **all 16 termini**, because the nearest as the crow flies often isn't where the line goes (Guildford runs to Waterloo, not Victoria).
 - **Walk allowance** = min(max walk, door-to-door − train), never above 15 min (`MAX_WALK`), because prices are fetched within 1.2 km. Under 5 min, the station is dropped (the owner agreed). 80 m/min straight-line.
 - **Schools** are judged from the station point: at least one primary and one secondary with tone `great`/`good` **and** `goodChance` (in/likely), using the faith setting.

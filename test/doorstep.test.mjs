@@ -169,6 +169,7 @@ test('API flows with mocked services', async () => {
   }));
 
   const calls = [];
+  const journeyUrls = [];
   globalThis.fetch = async (url, opts = {}) => {
     const u = String(url);
     calls.push(u);
@@ -226,6 +227,7 @@ test('API flows with mocked services', async () => {
       ] });
     }
     if (u.includes('api.tfl.gov.uk/Journey')) {
+      journeyUrls.push(u);
       return json({ journeys: [
         { duration: 64, startDateTime: '2026-10-20T07:56:00', arrivalDateTime: '2026-10-20T09:00:00', legs: [
           { mode: { name: 'walking' }, duration: 5, instruction: { summary: 'Walk' } },
@@ -250,6 +252,7 @@ test('API flows with mocked services', async () => {
   assert.deepEqual(schools.schools.map((s) => s.name), ['Near']);
 
   const t = await src.transport(51.9535, -0.283, 'bank');
+  assert.ok(journeyUrls.some((u) => u.includes('/JourneyResults/910GHITCHIN/to/')), 'stations are planned by their TfL id');
   assert.equal(t.doorToDoor.minutes, 64);
   assert.equal(t.doorToDoor.changes, 1);
   assert.equal(t.stations[0].name, 'Hitchin');
@@ -367,4 +370,31 @@ test('Faith setting changes catchment estimates', async () => {
   assert.equal(c.rc.status, 'likely');
   assert.match(c.rc.label, /your faith/);
   assert.equal(c.cm.rank, 3);
+});
+
+/* ───────────── Door to door via the nearest station (TfL can't plan from far-out coordinates) ───────────── */
+
+import { viaStation } from '../lib/sources.mjs';
+
+const ride = (minutes, departs = '08:00', arrives = '08:55') => ({
+  minutes, rideMinutes: minutes - 3, departs, arrives, changes: 0, changeAt: [],
+  legs: [{ mode: 'national-rail', minutes: minutes - 3, from: 'St Neots', to: "King's Cross", departs, arrives }],
+});
+
+test('viaStation adds the walk to the fastest station trip and puts the walk first', () => {
+  const j = viaStation([
+    { name: 'St Neots', distance: 800, toLondon: ride(58, '08:02', '09:00') }, // 10 min walk + 58 = 68
+    { name: 'Sandy', distance: 1900, toLondon: ride(50) }, // 24 min walk + 50 = 74
+  ]);
+  assert.equal(j.minutes, 68);
+  assert.equal(j.departs, '07:52');
+  assert.equal(j.arrives, '09:00');
+  assert.equal(j.viaStation, 'St Neots');
+  assert.deepEqual(j.legs[0], { mode: 'walking', minutes: 10, from: null, to: 'St Neots', departs: '07:52', arrives: '08:02' });
+  assert.equal(j.legs[1].mode, 'national-rail');
+});
+
+test('viaStation skips stations without a trip or too far to walk, and gives null when none is left', () => {
+  assert.equal(viaStation([{ name: 'A', distance: 500, toLondon: { error: 'x' } }, { name: 'B', distance: 2600, toLondon: ride(40) }]), null);
+  assert.equal(viaStation([]), null);
 });
