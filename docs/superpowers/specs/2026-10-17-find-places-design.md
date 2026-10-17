@@ -102,7 +102,7 @@ This is the slow part (the owner was told 20–40 minutes and accepted that). Re
 **Schools:** the same rule. London catchments are often much tighter than the estimate's distance bands, so when London is shown, the page adds a note: "London school places often go by a few hundred metres: check the council's last distance offered before relying on 'likely'."
 
 **Page:**
-- A new **Area** dropdown: Outside London (default), London zones 3–6, or Both. "Outside London" means outside Greater London, so it includes zones 7–9. It's remembered like the other settings and re-filters instantly.
+- A new **Area** dropdown: "Outside London (incl. zones 7–9)" (default), "Greater London (zones 3–6)", or Both. "Outside London" means outside Greater London, so it includes zones 7–9. It's remembered like the other settings and re-filters instantly.
 - Rows with a zone show it, for example "Zone 4" or "Zone 9", next to the station name.
 - Flood and click-through are unchanged.
 

@@ -41,8 +41,8 @@ export function schoolsPass(station, level = 'good') {
 
 /** The Area setting. "Outside London" means outside Greater London, so it includes zones 7-9. */
 export const AREAS = {
-  outside: 'Outside London',
-  london: 'London zones 3–6',
+  outside: 'Outside London (incl. zones 7–9)',
+  london: 'Greater London (zones 3–6)',
   both: 'Both',
 };
 
