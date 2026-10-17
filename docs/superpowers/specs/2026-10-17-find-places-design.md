@@ -27,7 +27,7 @@ Success: the owner opens "Find places", gets a ranked list of stations in a few 
 4. **Budget: typical 4-bed price ≤ budget.**
    - Budget is a **dropdown**, not fixed (the owner asked for this). Suggested range £400k–£1.5m in £50k steps, default £800k, remembered in localStorage **(builder's call on exact steps)**.
    - "Typical" = the **median** of standard (category A) Land Registry sales of **detached and semi-detached houses together**, from the last 3 years, within that station's walk allowance.
-   - Only sales matched to an EPC with **5+ habitable rooms** count (the existing "Likely 4+ beds" filter). The owner has `EPC_TOKEN` set. If the token is missing, fall back to all detached/semi sales and say so on the page.
+   - Only sales matched to an EPC with **5+ habitable rooms** count (the existing "Likely 4+ beds" filter). **Update 17 Oct 2026 (owner's choice):** room counts are checked on the 40 most recent sales per station, with EPC requests spaced out, because the EPC service rate-limited a full search. The owner has `EPC_TOKEN` set. If the token is missing, fall back to all detached/semi sales and say so on the page.
    - Fewer than 5 qualifying sales: the price is **"not enough sales"**. Show the station in a separate "couldn't check price" group, not as a pass **(Claude's call)**.
 
 **Not used as filters:** crime and flood. The owner agreed these are shown, not filtered.
