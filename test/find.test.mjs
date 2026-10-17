@@ -76,6 +76,19 @@ test('ranking: commute and schools filter, fastest train first', () => {
   assert.equal(out[1].allowanceMin, 10);
 });
 
+test('price: the bedrooms setting moves the room threshold (beds + 1 habitable rooms)', () => {
+  // Five 4-room houses at £500k and five 6-room houses at £900k, all close by.
+  const sales = [...Array(5)].map(() => ({ price: 500000, distance: 100, rooms: 4 }))
+    .concat([...Array(5)].map(() => ({ price: 900000, distance: 100, rooms: 6 })));
+  const p = { allSizesMedian: 700000, epc: { enabled: true, ran: true, error: null }, sales };
+  const at = (beds) => priceVerdict(p, { allowanceMin: 15, budget: 800000, beds });
+  assert.equal(at(3).status, 'pass', '3+ bed: all ten count, median £700k');
+  assert.equal(at(3).median, 700000);
+  assert.equal(at(4).status, 'over', '4+ bed (default): only the 6-room houses');
+  assert.equal(priceVerdict(p, { allowanceMin: 15, budget: 800000 }).status, 'over', 'default is 4+ bed');
+  assert.equal(at(5).median, 900000, '5+ bed: 6 rooms still counts');
+});
+
 test('ranking: the schools setting can ask for Outstanding primary, secondary or both', () => {
   const st = (name, p, s) => ({ name, trainMin: 30, primary: { tone: p }, secondary: { tone: s } });
   const all = [st('GG', 'good', 'good'), st('OG', 'great', 'good'), st('GO', 'good', 'great'), st('OO', 'great', 'great')];

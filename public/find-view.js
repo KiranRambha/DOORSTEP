@@ -1,6 +1,6 @@
 // Find places view: settings bar, ranked list of stations, prices filling in, and a map of matches.
 // The rules live in find.js; this file only fetches and draws.
-import { priceVerdict, rankStations, retryable, pageOf, MAX_WALK, SCHOOL_LEVELS } from './find.js';
+import { priceVerdict, rankStations, retryable, pageOf, MAX_WALK, SCHOOL_LEVELS, BEDS, DEFAULT_BEDS } from './find.js';
 import { friendlyError } from './errors.js';
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -31,6 +31,7 @@ const settings = () => ({
   maxWalk: Number($('#fp-walk').value),
   budget: Number($('#fp-budget').value),
   schools: $('#fp-schools').value,
+  beds: Number($('#fp-beds').value),
   faith: $('#fp-faith').value,
 });
 
@@ -45,11 +46,12 @@ export function initFind(deps) {
   fill($('#fp-door'), DOOR_OPTIONS, (v) => `${v} min or less`, d.store.get('doorstep.find.maxDoor'), 60);
   fill($('#fp-walk'), WALK_OPTIONS, (v) => `up to ${v} min`, d.store.get('doorstep.find.maxWalk'), 15);
   fill($('#fp-budget'), BUDGETS, (v) => `up to ${d.gbpShort(v)}`, d.store.get('doorstep.find.budget'), 800000);
+  fill($('#fp-beds'), BEDS, (v) => `${v}+ bedrooms`, d.store.get('doorstep.find.beds'), DEFAULT_BEDS);
   fill($('#fp-schools'), Object.keys(SCHOOL_LEVELS), (v) => SCHOOL_LEVELS[v], d.store.get('doorstep.find.schools'), 'good');
   $('#fp-faith').innerHTML = $('#school-faith').innerHTML; // same options as the Schools panel
   $('#fp-faith').value = d.store.get('doorstep.faith') || '';
 
-  for (const [id, key] of [['#fp-door', 'maxDoor'], ['#fp-walk', 'maxWalk'], ['#fp-budget', 'budget'], ['#fp-schools', 'schools']]) {
+  for (const [id, key] of [['#fp-door', 'maxDoor'], ['#fp-walk', 'maxWalk'], ['#fp-budget', 'budget'], ['#fp-beds', 'beds'], ['#fp-schools', 'schools']]) {
     $(id).addEventListener('change', () => { d.store.set(`doorstep.find.${key}`, $(id).value); S.page = 1; draw(); pump(); });
   }
   $('#fp-pager').addEventListener('click', (e) => {
@@ -111,7 +113,7 @@ async function load() {
 function verdictFor(st, set = settings()) {
   const p = S.prices.get(st.id);
   if (!p) return { status: 'pending' };
-  const v = priceVerdict(p, { allowanceMin: st.allowanceMin, budget: set.budget });
+  const v = priceVerdict(p, { allowanceMin: st.allowanceMin, budget: set.budget, beds: set.beds });
   return v.status === 'needs-epc' ? { status: 'pending' } : v;
 }
 
@@ -125,7 +127,7 @@ function nextJob() {
     if (asked === 'busy') continue;
     if (!p) return { kind: 'price', st };
     // Budget raised past a station the cheap check ruled out: ask again so room counts are checked.
-    if (priceVerdict(p, { allowanceMin: st.allowanceMin, budget: set.budget }).status === 'needs-epc' && asked !== set.budget) return { kind: 'price', st };
+    if (priceVerdict(p, { allowanceMin: st.allowanceMin, budget: set.budget, beds: set.beds }).status === 'needs-epc' && asked !== set.budget) return { kind: 'price', st };
     if (verdictFor(st, set).status === 'pass' && !S.flood.has(st.id)) return { kind: 'flood', st };
   }
   // Only once everything else is done (less load): retry prices that failed for a passing reason.
@@ -177,11 +179,11 @@ function floodHtml(id) {
   return `<span class="chip flood-${d.esc(f.verdict)}" title="Flood risk from rivers and the sea within about 1 km">${d.esc(f.label)}</span>`;
 }
 
-function rowHtml(st, n, v) {
+function rowHtml(st, n, v, beds) {
   const name = d.esc(d.destName(st.terminus));
   const change = st.changes ? `${st.changes} change${st.changes === 1 ? '' : 's'}${st.changeAt?.length ? ` at ${d.esc(st.changeAt.join(', '))}` : ''}` : 'direct';
   const price = v.status === 'pass'
-    ? `<div class="fp-price"><span class="main num">${d.gbpShort(v.median)}</span><small>typical ${v.allSizes ? 'detached or semi (all sizes)' : '4-bed'} · from ${v.count} sales</small></div>`
+    ? `<div class="fp-price"><span class="main num">${d.gbpShort(v.median)}</span><small>typical ${v.allSizes ? 'detached or semi (all sizes)' : `${beds}+ bed`} · from ${v.count} sales</small></div>`
     : '<div class="fp-price"><span class="loading">checking price…</span></div>';
   return `<li class="fp-row${v.status === 'pass' ? '' : ' pending'}" data-id="${d.esc(st.id)}" tabindex="0" role="button" aria-label="Open ${d.esc(st.name)}">
     ${v.status === 'pass' ? `<span class="fp-num">${n}</span>` : '<span class="fp-num muted">·</span>'}
@@ -223,7 +225,7 @@ function draw() {
   const rows = [...pass.map((r, i) => ({ ...r, n: i + 1 })), ...pending.map((r) => ({ ...r, n: 0 }))];
   const pg = pageOf(rows, S.page);
   S.page = pg.page;
-  $('#fp-list').innerHTML = pg.items.map((r) => rowHtml(r.st, r.n, r.v)).join('')
+  $('#fp-list').innerHTML = pg.items.map((r) => rowHtml(r.st, r.n, r.v, set.beds)).join('')
     || (pending.length ? '' : '<li class="fp-empty">No stations match these settings. Try a longer door-to-door time, a higher budget or a different schools setting.</li>');
   drawPager(pg, rows.length);
 

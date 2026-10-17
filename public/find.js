@@ -7,7 +7,10 @@ export const MIN_WALK = 5; // minutes; less than this leaves too few homes to ju
 export const MAX_WALK = 15; // minutes; prices are fetched within this walk (1.2 km), so never allow more
 export const WALK_M_PER_MIN = 80;
 export const MIN_SALES = 5;
-export const MIN_ROOMS = 5; // EPC habitable rooms: a 4-bed house usually has 5 or 6
+// EPC habitable rooms = bedrooms plus living and dining rooms, so N+ bedrooms is about N+1 rooms.
+export const BEDS = [3, 4, 5];
+export const DEFAULT_BEDS = 4;
+export const roomsFor = (beds) => beds + 1;
 
 /** Minutes of walk left once the train is taken off the door-to-door limit, capped at the max walk.
  *  null when the station is too slow (or couldn't be planned). */
@@ -48,9 +51,9 @@ export function pageOf(items, page, size = PAGE_SIZE) {
 
 const shortMoney = (n) => (n >= 1e6 ? `£${(n / 1e6).toFixed(2).replace(/0$/, '')}m` : `£${Math.round(n / 1000)}k`);
 
-/** Does a station's typical 4-bed price fit the budget? `p` is the /api/find/price body.
+/** Does a station's typical price for N+ bedrooms (default 4) fit the budget? `p` is the /api/find/price body.
  *  status: 'pass' | 'over' | 'unknown' (never a pass) | 'needs-epc' (fetch again with this budget). */
-export function priceVerdict(p, { allowanceMin, budget }) {
+export function priceVerdict(p, { allowanceMin, budget, beds = DEFAULT_BEDS }) {
   const out = (status, reason, extra = {}) => ({ status, reason, median: null, count: 0, allSizes: false, ...extra });
   if (!p || p.error) return out('unknown', p ? friendlyError(p.error) : 'Price not checked');
   const epc = p.epc || {};
@@ -61,7 +64,7 @@ export function priceVerdict(p, { allowanceMin, budget }) {
   if (epc.enabled && epc.error) return out('unknown', 'The energy certificate service isn\'t responding');
   const maxM = allowanceMin * WALK_M_PER_MIN;
   const prices = (p.sales || [])
-    .filter((s) => s.distance <= maxM && (!epc.enabled || s.rooms >= MIN_ROOMS))
+    .filter((s) => s.distance <= maxM && (!epc.enabled || s.rooms >= roomsFor(beds)))
     .map((s) => s.price);
   const allSizes = !epc.enabled;
   if (prices.length < MIN_SALES) return out('unknown', 'Not enough sales', { count: prices.length, allSizes });
